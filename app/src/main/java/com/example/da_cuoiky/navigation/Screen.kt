@@ -1,0 +1,35 @@
+package com.example.da_cuoiky.navigation
+
+// ─────────────────────────────────
+// Route Definitions
+// ─────────────────────────────────
+
+sealed class Screen(val route: String) {
+    // Auth
+    object Login : Screen("login")
+
+    // Staff Flow
+    object StaffFloorPlan : Screen("staff/floor_plan")
+    object StaffOrder : Screen("staff/order/{tableId}") {
+        fun buildRoute(tableId: String) = "staff/order/$tableId"
+    }
+    object StaffKitchen : Screen("staff/kitchen")
+    object StaffPOS : Screen("staff/pos/{orderId}") {
+        fun buildRoute(orderId: String) = "staff/pos/$orderId"
+    }
+    object StaffProfile : Screen("staff/profile")
+
+    // Customer Flow
+    object CustomerHome : Screen("customer/home")
+    object CustomerMenu : Screen("customer/menu")
+    object ProductDetail : Screen("customer/product/{itemId}") {
+        fun buildRoute(itemId: String) = "customer/product/$itemId"
+    }
+    object CustomerCart : Screen("customer/cart")
+    object CustomerCheckout : Screen("customer/checkout")
+    object CustomerBooking : Screen("customer/booking")
+    object OrderTracking : Screen("customer/tracking/{orderId}") {
+        fun buildRoute(orderId: String) = "customer/tracking/$orderId"
+    }
+    object CustomerProfile : Screen("customer/profile")
+}
