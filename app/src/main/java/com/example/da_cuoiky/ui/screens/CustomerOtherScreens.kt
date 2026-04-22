@@ -473,7 +473,7 @@ fun CustomerProfileScreen(
                 }
             }
 
-            // Loyalty progress (Chỉ hiện khi đã đăng nhập)
+            // Loyalty progress
             if (user != null) {
                 item {
                     Card(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
@@ -522,11 +522,10 @@ fun CustomerProfileScreen(
                             onClick = onLogout
                         )
                     } else {
-                        // RÚT GỌN CHỈ CÒN 1 NÚT ĐĂNG NHẬP (ĐÃ CÓ Ở HEADER) HOẶC ĐỔI TÊN Ở ĐÂY
                         ProfileMenuItem(
                             icon = Icons.Default.Login, 
                             title = "Đăng nhập", 
-                            subtitle = "Khách hàng, Nhân viên hoặc Bếp",
+                            subtitle = null, // ĐÃ BỎ SUBTITLE THEO Ý BẠN
                             onClick = onNavigateToLogin
                         )
                     }

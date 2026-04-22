@@ -67,11 +67,16 @@ dependencies {
     // Image Loading
     implementation(libs.coil.compose)
     
-    // Firebase (Dùng BOM từ Version Catalog)
+    // Firebase
     implementation(platform(libs.firebase.bom))
     implementation("com.google.firebase:firebase-analytics")
     implementation("com.google.firebase:firebase-auth")
     implementation("com.google.firebase:firebase-firestore")
+
+    // Networking (Retrofit + GSON)
+    implementation(libs.retrofit)
+    implementation(libs.retrofit.gson)
+    implementation(libs.gson)
 
     // Tests
     testImplementation(libs.junit)

@@ -11,8 +11,6 @@ import com.example.da_cuoiky.model.*
 import com.example.da_cuoiky.navigation.Screen
 import com.example.da_cuoiky.ui.screens.*
 import com.example.da_cuoiky.ui.theme.DA_CuoiKyTheme
-import com.google.firebase.auth.FirebaseAuth
-import com.google.firebase.firestore.FirebaseFirestore
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -42,7 +40,6 @@ fun RestaurantApp() {
         composable(Screen.Login.route) {
             LoginScreen(onRoleSelected = { role ->
                 // Giả lập tạo User object sau khi đăng nhập thành công
-                // Trong thực tế, bạn sẽ lấy User từ Firestore dựa trên UID
                 val mockUser = User(
                     id = "U${System.currentTimeMillis()}",
                     name = if(role == UserRole.CUSTOMER) "Khách Hàng Mới" else "Nhân Viên",
@@ -121,6 +118,7 @@ fun RestaurantApp() {
         // ─────────────────────────────────────────
         composable(Screen.CustomerHome.route) {
             CustomerHomeScreen(
+                user = currentUser, // ĐÃ THÊM THAM SỐ CÒN THIẾU
                 onMenuClick = { navController.navigate(Screen.CustomerMenu.route) },
                 onBookingClick = { navController.navigate(Screen.CustomerBooking.route) },
                 onOrdersClick = { navController.navigate(Screen.OrderTracking.buildRoute("O1001")) },
@@ -189,7 +187,7 @@ fun RestaurantApp() {
 
         composable(Screen.CustomerProfile.route) {
             CustomerProfileScreen(
-                user = currentUser, // Truyền User hiện tại (có thể là null)
+                user = currentUser,
                 onBack = { navController.popBackStack() },
                 onNavigateToLogin = { navController.navigate(Screen.Login.route) },
                 onLogout = { currentUser = null }

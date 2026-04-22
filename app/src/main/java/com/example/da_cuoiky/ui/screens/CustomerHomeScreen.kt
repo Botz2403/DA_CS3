@@ -26,7 +26,7 @@ import com.example.da_cuoiky.ui.theme.*
 
 @Composable
 fun CustomerHomeScreen(
-    user: User = SampleData.customerUser,
+    user: User?, // ĐÃ ĐỔI THÀNH NULLABLE
     onMenuClick: () -> Unit,
     onBookingClick: () -> Unit,
     onOrdersClick: () -> Unit,
@@ -80,7 +80,9 @@ fun CustomerHomeScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Column {
-                            Text("Xin chào, ${user.name.split(" ").last()}! 👋",
+                            // XỬ LÝ LỜI CHÀO KHI USER NULL
+                            val displayName = user?.name?.split(" ")?.last() ?: "bạn"
+                            Text("Xin chào, $displayName! 👋",
                                 style = MaterialTheme.typography.bodyLarge,
                                 color = Color.White.copy(alpha = 0.9f))
                             Text("Gourmet Hub",
@@ -100,24 +102,33 @@ fun CustomerHomeScreen(
                         }
                     }
 
-                    // Loyalty Points Badge
-                    Surface(
-                        color = Color.White.copy(alpha = 0.15f),
-                        shape = RoundedCornerShape(12.dp)
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    // Loyalty Points Badge (CHỈ HIỆN KHI ĐÃ ĐĂNG NHẬP)
+                    if (user != null) {
+                        Surface(
+                            color = Color.White.copy(alpha = 0.15f),
+                            shape = RoundedCornerShape(12.dp)
                         ) {
-                            Icon(Icons.Default.Stars, "Điểm tích lũy", tint = WarningColor,
-                                modifier = Modifier.size(20.dp))
-                            Text("${user.loyaltyPoints} điểm tích lũy",
-                                color = Color.White, fontWeight = FontWeight.SemiBold)
-                            Text("• Cấp Vàng 🥇",
-                                color = WarningColor, fontWeight = FontWeight.Bold,
-                                style = MaterialTheme.typography.bodySmall)
+                            Row(
+                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Icon(Icons.Default.Stars, "Điểm tích lũy", tint = WarningColor,
+                                    modifier = Modifier.size(20.dp))
+                                Text("${user.loyaltyPoints} điểm tích lũy",
+                                    color = Color.White, fontWeight = FontWeight.SemiBold)
+                                Text("• Cấp Vàng 🥇",
+                                    color = WarningColor, fontWeight = FontWeight.Bold,
+                                    style = MaterialTheme.typography.bodySmall)
+                            }
                         }
+                    } else {
+                        // Nếu chưa đăng nhập, có thể hiện một câu mời gọi nhẹ nhàng
+                        Text(
+                            "Đăng nhập để nhận ưu đãi ngay! ✨",
+                            color = Color.White.copy(alpha = 0.8f),
+                            style = MaterialTheme.typography.bodySmall
+                        )
                     }
                 }
             }
@@ -459,7 +470,7 @@ fun CustomerBottomBar(
         NavigationBarItem(
             selected = currentRoute == "profile",
             onClick = onProfileClick,
-            icon = { Icon(Icons.Default.PersonOutline, "Hồ sơ") },
+            icon = { Icon(Icons.Default.AccountCircle, "Hồ sơ") },
             label = { Text("Hồ sơ") }
         )
     }
