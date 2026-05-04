@@ -153,7 +153,7 @@ fun KitchenTicketCard(
     }
 
     val borderColor = if (ticket.isOverdue) MaterialTheme.colorScheme.error
-                      else Color.Transparent
+    else Color.Transparent
 
     Card(
         modifier = Modifier.fillMaxWidth(),
