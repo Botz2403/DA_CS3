@@ -250,7 +250,7 @@ private fun PaymentMethodCard(
             ),
         colors = CardDefaults.cardColors(
             containerColor = if (isSelected) PrimaryColor.copy(alpha = 0.08f)
-                             else MaterialTheme.colorScheme.surface
+            else MaterialTheme.colorScheme.surface
         )
     ) {
         Row(
