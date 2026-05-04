@@ -14,6 +14,7 @@ googleServices = "4.4.2"
 firebaseBom = "34.12.0"
 retrofit = "2.11.0"
 gson = "2.11.0"
+tvMaterial = "1.0.1"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -36,6 +37,7 @@ firebase-bom = { group = "com.google.firebase", name = "firebase-bom", version.r
 retrofit = { group = "com.squareup.retrofit2", name = "retrofit", version.ref = "retrofit" }
 retrofit-gson = { group = "com.squareup.retrofit2", name = "converter-gson", version.ref = "retrofit" }
 gson = { group = "com.google.code.gson", name = "gson", version.ref = "gson" }
+androidx-tv-material = { group = "androidx.tv", name = "tv-material", version.ref = "tvMaterial" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

@@ -7,6 +7,7 @@ package com.example.da_cuoiky.navigation
 sealed class Screen(val route: String) {
     // Auth
     object Login : Screen("login")
+    object Register : Screen("register")
 
     // Staff Flow
     object StaffFloorPlan : Screen("staff/floor_plan")

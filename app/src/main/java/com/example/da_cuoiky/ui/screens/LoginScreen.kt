@@ -1,8 +1,14 @@
 package com.example.da_cuoiky.ui.screens
 
+import androidx.compose.animation.*
+import androidx.compose.animation.core.*
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.Lock
@@ -12,11 +18,20 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.blur
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.da_cuoiky.R
@@ -24,224 +39,477 @@ import com.example.da_cuoiky.model.UserRole
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
+// ── Màu sắc chủ đạo ──────────────────────────────────────────────────────────
+private val GradientStart   = Color(0xFFFF7043)   // cam đậm
+private val GradientMid     = Color(0xFFE53935)   // đỏ tươi
+private val GradientEnd     = Color(0xFF8B0000)   // đỏ đậm
+private val CardBg          = Color(0xFFFFFBFF)
+private val TextPrimary     = Color(0xFF1A1A2E)
+private val TextSecondary   = Color(0xFF6B7280)
+private val FieldBorder     = Color(0xFFE5E7EB)
+private val SuccessGreen    = Color(0xFF059669)
+private val ErrorRed        = Color(0xFFDC2626)
+
 @Composable
 fun LoginScreen(
-    onRoleSelected: (UserRole) -> Unit
+    onRoleSelected: (UserRole) -> Unit,
+    onNavigateToRegister: () -> Unit = {}
 ) {
-    var email by remember { mutableStateOf("") }
-    var password by remember { mutableStateOf("") }
+    var email           by remember { mutableStateOf("") }
+    var password        by remember { mutableStateOf("") }
     var passwordVisible by remember { mutableStateOf(false) }
-    var isLoading by remember { mutableStateOf(false) }
+    var isLoading       by remember { mutableStateOf(false) }
     var feedbackMessage by remember { mutableStateOf<String?>(null) }
-    var isError by remember { mutableStateOf(false) }
-    
+    var isError         by remember { mutableStateOf(false) }
+
     val scope = rememberCoroutineScope()
 
-    Surface(
-        modifier = Modifier.fillMaxSize(),
-        color = MaterialTheme.colorScheme.background
+    // ── Animate logo scale on entry ────────────────────────────────────────
+    val logoScale by animateFloatAsState(
+        targetValue = 1f,
+        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow),
+        label = "logoScale"
+    )
+
+    // ── Pulse animation for the logo ring ─────────────────────────────────
+    val infiniteTransition = rememberInfiniteTransition(label = "pulse")
+    val pulseAlpha by infiniteTransition.animateFloat(
+        initialValue = 0.3f,
+        targetValue  = 0.0f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1800, easing = EaseInOut),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "pulseAlpha"
+    )
+    val pulseScale by infiniteTransition.animateFloat(
+        initialValue = 1f,
+        targetValue  = 1.25f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1800, easing = EaseInOut),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "pulseScale"
+    )
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(
+                brush = Brush.verticalGradient(
+                    colors = listOf(GradientStart, GradientMid, GradientEnd)
+                )
+            )
     ) {
+        // ── Decorative blurred circles ─────────────────────────────────────
+        Box(
+            modifier = Modifier
+                .size(220.dp)
+                .offset(x = (-60).dp, y = (-60).dp)
+                .alpha(0.25f)
+                .blur(60.dp)
+                .background(Color.White, CircleShape)
+        )
+        Box(
+            modifier = Modifier
+                .size(180.dp)
+                .align(Alignment.BottomEnd)
+                .offset(x = 50.dp, y = 50.dp)
+                .alpha(0.20f)
+                .blur(50.dp)
+                .background(Color(0xFFFFD700), CircleShape)
+        )
+
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(24.dp),
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 20.dp, vertical = 48.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
-            Icon(
-                imageVector = Icons.Default.Lock,
-                contentDescription = null,
-                modifier = Modifier.size(80.dp),
-                tint = MaterialTheme.colorScheme.primary
-            )
+            // ── Logo / Icon area ─────────────────────────────────────────
+            Box(
+                contentAlignment = Alignment.Center,
+                modifier = Modifier.size(110.dp)
+            ) {
+                // Pulse ring
+                Box(
+                    modifier = Modifier
+                        .size(110.dp)
+                        .scale(pulseScale)
+                        .alpha(pulseAlpha)
+                        .background(Color.White, CircleShape)
+                )
+                // Solid white circle
+                Box(
+                    modifier = Modifier
+                        .size(90.dp)
+                        .scale(logoScale)
+                        .background(Color.White, CircleShape),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Lock,
+                        contentDescription = null,
+                        modifier = Modifier.size(44.dp),
+                        tint = GradientMid
+                    )
+                }
+            }
 
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(20.dp))
+
+            // ── App name ──────────────────────────────────────────────────
+            Text(
+                text = "🍽️ Gourmet Hub",
+                style = TextStyle(
+                    fontSize = 30.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    color = Color.White,
+                    shadow = Shadow(
+                        color = Color.Black.copy(alpha = 0.3f),
+                        offset = Offset(0f, 4f),
+                        blurRadius = 8f
+                    )
+                )
+            )
 
             Text(
-                text = "Đăng Nhập Hệ Thống",
-                fontSize = 24.sp,
-                fontWeight = FontWeight.Bold
+                text = "Hệ thống quản lý nhà hàng",
+                fontSize = 14.sp,
+                color = Color.White.copy(alpha = 0.80f),
+                modifier = Modifier.padding(top = 4.dp)
             )
 
-            Spacer(modifier = Modifier.height(32.dp))
+            Spacer(modifier = Modifier.height(36.dp))
 
-            // Email Input
-            OutlinedTextField(
-                value = email,
-                onValueChange = { email = it },
-                label = { Text("Email") },
-                placeholder = { Text("staff@test.com hoặc user@test.com") },
-                leadingIcon = { Icon(Icons.Default.Email, contentDescription = null) },
+            // ── Glassmorphism Card ─────────────────────────────────────────
+            Card(
                 modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp),
-                singleLine = true,
-                enabled = !isLoading
-            )
+                shape = RoundedCornerShape(28.dp),
+                colors = CardDefaults.cardColors(containerColor = CardBg),
+                elevation = CardDefaults.cardElevation(defaultElevation = 16.dp)
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 24.dp, vertical = 32.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(
+                        text = "Đăng Nhập",
+                        fontSize = 22.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = TextPrimary
+                    )
+                    Text(
+                        text = "Chào mừng trở lại! Vui lòng đăng nhập.",
+                        fontSize = 13.sp,
+                        color = TextSecondary,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.padding(top = 6.dp, bottom = 24.dp)
+                    )
 
-            Spacer(modifier = Modifier.height(16.dp))
+                    // ── Email field ──────────────────────────────────────
+                    OutlinedTextField(
+                        value = email,
+                        onValueChange = { email = it },
+                        label = { Text("Email") },
+                        placeholder = { Text("staff@test.com hoặc user@test.com", fontSize = 12.sp) },
+                        leadingIcon = {
+                            Icon(
+                                Icons.Default.Email,
+                                contentDescription = null,
+                                tint = if (email.isNotEmpty()) GradientMid else TextSecondary
+                            )
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(14.dp),
+                        singleLine = true,
+                        enabled = !isLoading,
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor   = GradientMid,
+                            unfocusedBorderColor = FieldBorder,
+                            focusedLabelColor    = GradientMid,
+                            cursorColor          = GradientMid
+                        )
+                    )
 
-            // Password Input
-            OutlinedTextField(
-                value = password,
-                onValueChange = { password = it },
-                label = { Text("Mật khẩu") },
-                leadingIcon = { Icon(Icons.Default.Lock, contentDescription = null) },
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp),
-                visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
-                trailingIcon = {
-                    IconButton(onClick = { passwordVisible = !passwordVisible }) {
-                        Icon(
-                            imageVector = if (passwordVisible) Icons.Default.Visibility else Icons.Default.VisibilityOff,
-                            contentDescription = null
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    // ── Password field ───────────────────────────────────
+                    OutlinedTextField(
+                        value = password,
+                        onValueChange = { password = it },
+                        label = { Text("Mật khẩu") },
+                        leadingIcon = {
+                            Icon(
+                                Icons.Default.Lock,
+                                contentDescription = null,
+                                tint = if (password.isNotEmpty()) GradientMid else TextSecondary
+                            )
+                        },
+                        trailingIcon = {
+                            IconButton(onClick = { passwordVisible = !passwordVisible }) {
+                                Icon(
+                                    imageVector = if (passwordVisible) Icons.Default.Visibility else Icons.Default.VisibilityOff,
+                                    contentDescription = null,
+                                    tint = TextSecondary
+                                )
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(14.dp),
+                        visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                        singleLine = true,
+                        enabled = !isLoading,
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor   = GradientMid,
+                            unfocusedBorderColor = FieldBorder,
+                            focusedLabelColor    = GradientMid,
+                            cursorColor          = GradientMid
+                        )
+                    )
+
+                    // ── Quên mật khẩu ────────────────────────────────────
+                    TextButton(
+                        onClick = {
+                            feedbackMessage = "Chức năng này yêu cầu Firebase thật."
+                            isError = false
+                        },
+                        modifier = Modifier.align(Alignment.End),
+                        enabled = !isLoading
+                    ) {
+                        Text(
+                            text = "Quên mật khẩu?",
+                            color = GradientMid,
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 13.sp
                         )
                     }
-                },
-                singleLine = true,
-                enabled = !isLoading
-            )
 
-            // Nút Quên mật khẩu
-            TextButton(
-                onClick = {
-                    feedbackMessage = "Chức năng này yêu cầu Firebase thật."
-                    isError = false
-                },
-                modifier = Modifier.align(Alignment.End),
-                enabled = !isLoading
-            ) {
-                Text("Quên mật khẩu?")
-            }
-
-            // Hiển thị thông báo
-            if (feedbackMessage != null) {
-                Text(
-                    text = feedbackMessage!!,
-                    color = if (isError) MaterialTheme.colorScheme.error else Color(0xFF2E7D32),
-                    fontSize = 14.sp,
-                    modifier = Modifier.padding(vertical = 8.dp)
-                )
-            }
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // Nút Đăng Nhập Chính (Dùng dữ liệu mẫu)
-            Button(
-                onClick = {
-                    if (email.isBlank() || password.isBlank()) {
-                        feedbackMessage = "Vui lòng nhập đầy đủ email và mật khẩu"
-                        isError = true
-                        return@Button
-                    }
-                    
-                    isLoading = true
-                    feedbackMessage = null
-
-                    // Giả lập xử lý đăng nhập trong 1.5 giây
-                    scope.launch {
-                        delay(1500)
-                        isLoading = false
-                        
-                        when {
-                            email == "staff@test.com" && password == "123456" -> {
-                                onRoleSelected(UserRole.STAFF)
-                            }
-                            email == "user@test.com" && password == "123456" -> {
-                                onRoleSelected(UserRole.CUSTOMER)
-                            }
-                            else -> {
-                                feedbackMessage = "Email hoặc mật khẩu không đúng!\n(Thử: staff@test.com hoặc user@test.com)"
-                                isError = true
+                    // ── Feedback message ─────────────────────────────────
+                    AnimatedVisibility(
+                        visible = feedbackMessage != null,
+                        enter   = fadeIn() + slideInVertically(),
+                        exit    = fadeOut()
+                    ) {
+                        feedbackMessage?.let { msg ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(bottom = 10.dp)
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .background(
+                                        if (isError) ErrorRed.copy(alpha = 0.10f)
+                                        else SuccessGreen.copy(alpha = 0.10f)
+                                    )
+                                    .padding(horizontal = 14.dp, vertical = 10.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = if (isError) "⚠️" else "✅",
+                                    fontSize = 16.sp,
+                                    modifier = Modifier.padding(end = 8.dp)
+                                )
+                                Text(
+                                    text = msg,
+                                    color = if (isError) ErrorRed else SuccessGreen,
+                                    fontSize = 13.sp,
+                                    lineHeight = 18.sp
+                                )
                             }
                         }
                     }
-                },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(56.dp),
-                shape = RoundedCornerShape(12.dp),
-                enabled = !isLoading
-            ) {
-                if (isLoading) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(24.dp),
-                        color = Color.White,
-                        strokeWidth = 2.dp
-                    )
-                } else {
-                    Text("Đăng Nhập", fontSize = 18.sp)
-                }
-            }
 
-            Spacer(modifier = Modifier.height(24.dp))
+                    Spacer(modifier = Modifier.height(4.dp))
 
-            // Divider
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                HorizontalDivider(modifier = Modifier.weight(1f), color = Color.LightGray)
-                Text(
-                    text = " Hoặc đăng nhập với ",
-                    color = Color.Gray,
-                    fontSize = 14.sp,
-                    modifier = Modifier.padding(horizontal = 8.dp)
-                )
-                HorizontalDivider(modifier = Modifier.weight(1f), color = Color.LightGray)
-            }
+                    // ── Nút Đăng Nhập ────────────────────────────────────
+                    Button(
+                        onClick = {
+                            if (email.isBlank() || password.isBlank()) {
+                                feedbackMessage = "Vui lòng nhập đầy đủ email và mật khẩu"
+                                isError = true
+                                return@Button
+                            }
+                            isLoading = true
+                            feedbackMessage = null
+                            scope.launch {
+                                delay(1500)
+                                isLoading = false
+                                when {
+                                    email == "staff@test.com" && password == "123456" -> {
+                                        onRoleSelected(UserRole.STAFF)
+                                    }
+                                    email == "user@test.com" && password == "123456" -> {
+                                        onRoleSelected(UserRole.CUSTOMER)
+                                    }
+                                    else -> {
+                                        feedbackMessage = "Email hoặc mật khẩu không đúng!\n(Thử: staff@test.com hoặc user@test.com)"
+                                        isError = true
+                                    }
+                                }
+                            }
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(54.dp),
+                        shape = RoundedCornerShape(14.dp),
+                        enabled = !isLoading,
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = Color.Transparent,
+                            disabledContainerColor = Color.Transparent
+                        ),
+                        contentPadding = PaddingValues(0.dp),
+                        elevation = ButtonDefaults.buttonElevation(defaultElevation = 0.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(
+                                    brush = if (!isLoading)
+                                        Brush.horizontalGradient(listOf(GradientStart, GradientMid, GradientEnd))
+                                    else
+                                        Brush.horizontalGradient(listOf(Color.Gray, Color.Gray)),
+                                    shape = RoundedCornerShape(14.dp)
+                                ),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            if (isLoading) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(22.dp),
+                                        color = Color.White,
+                                        strokeWidth = 2.5.dp
+                                    )
+                                    Spacer(Modifier.width(10.dp))
+                                    Text("Đang đăng nhập...", color = Color.White, fontSize = 15.sp)
+                                }
+                            } else {
+                                Text(
+                                    text = "Đăng Nhập",
+                                    color = Color.White,
+                                    fontSize = 16.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    letterSpacing = 0.5.sp
+                                )
+                            }
+                        }
+                    }
 
-            Spacer(modifier = Modifier.height(24.dp))
+                    Spacer(modifier = Modifier.height(24.dp))
 
-            // Social Login Buttons
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                OutlinedButton(
-                    onClick = { /* Demo Google */ },
-                    modifier = Modifier.weight(1f).height(56.dp),
-                    shape = RoundedCornerShape(12.dp),
-                    enabled = !isLoading,
-                    contentPadding = PaddingValues(0.dp)
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Image(
-                            painter = painterResource(id = R.drawable.google_logo),
-                            contentDescription = "Google Logo",
-                            modifier = Modifier.size(24.dp)
+                    // ── Divider ───────────────────────────────────────────
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        HorizontalDivider(modifier = Modifier.weight(1f), color = FieldBorder)
+                        Text(
+                            text = "  hoặc tiếp tục với  ",
+                            color = TextSecondary,
+                            fontSize = 12.sp
                         )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("Google", color = Color.DarkGray)
+                        HorizontalDivider(modifier = Modifier.weight(1f), color = FieldBorder)
+                    }
+
+                    Spacer(modifier = Modifier.height(20.dp))
+
+                    // ── Social Buttons ────────────────────────────────────
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        OutlinedButton(
+                            onClick = { /* Demo Google */ },
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(50.dp),
+                            shape = RoundedCornerShape(14.dp),
+                            enabled = !isLoading,
+                            border = ButtonDefaults.outlinedButtonBorder.copy(width = 1.dp),
+                            colors = ButtonDefaults.outlinedButtonColors(
+                                containerColor = Color(0xFFF9FAFB)
+                            ),
+                            contentPadding = PaddingValues(0.dp)
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.Center,
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Image(
+                                    painter = painterResource(id = R.drawable.google_logo),
+                                    contentDescription = "Google Logo",
+                                    modifier = Modifier.size(22.dp)
+                                )
+                                Spacer(Modifier.width(8.dp))
+                                Text("Google", color = TextPrimary, fontWeight = FontWeight.Medium, fontSize = 14.sp)
+                            }
+                        }
+
+                        OutlinedButton(
+                            onClick = { /* Demo Facebook */ },
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(50.dp),
+                            shape = RoundedCornerShape(14.dp),
+                            enabled = !isLoading,
+                            border = ButtonDefaults.outlinedButtonBorder.copy(width = 1.dp),
+                            colors = ButtonDefaults.outlinedButtonColors(
+                                containerColor = Color(0xFFF9FAFB)
+                            ),
+                            contentPadding = PaddingValues(0.dp)
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.Center,
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Image(
+                                    painter = painterResource(id = R.drawable.facebook_logo),
+                                    contentDescription = "Facebook Logo",
+                                    modifier = Modifier.size(22.dp)
+                                )
+                                Spacer(Modifier.width(8.dp))
+                                Text("Facebook", color = TextPrimary, fontWeight = FontWeight.Medium, fontSize = 14.sp)
+                            }
+                        }
                     }
                 }
-
-                OutlinedButton(
-                    onClick = { /* Demo Facebook */ },
-                    modifier = Modifier.weight(1f).height(56.dp),
-                    shape = RoundedCornerShape(12.dp),
-                    enabled = !isLoading,
-                    contentPadding = PaddingValues(0.dp)
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Image(
-                            painter = painterResource(id = R.drawable.facebook_logo),
-                            contentDescription = "Facebook Logo",
-                            modifier = Modifier.size(24.dp)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("Facebook", color = Color.DarkGray)
-                    }
-                }
             }
 
-            Spacer(modifier = Modifier.height(32.dp))
+            Spacer(modifier = Modifier.height(28.dp))
 
+            // ── Đăng ký ───────────────────────────────────────────────────
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("Chưa có tài khoản? ")
-                TextButton(onClick = { /* Điều hướng tới màn Register */ }, enabled = !isLoading) {
-                    Text("Đăng ký ngay", fontWeight = FontWeight.Bold)
+                Text(
+                    text = "Chưa có tài khoản?",
+                    color = Color.White.copy(alpha = 0.85f),
+                    fontSize = 14.sp
+                )
+                TextButton(
+                    onClick = onNavigateToRegister,
+                    enabled = !isLoading
+                ) {
+                    Text(
+                        text = "Đăng ký ngay",
+                        color = Color.White,
+                        fontWeight = FontWeight.ExtraBold,
+                        fontSize = 14.sp
+                    )
                 }
             }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Text(
+                text = "© 2026 Gourmet Hub. All rights reserved.",
+                color = Color.White.copy(alpha = 0.45f),
+                fontSize = 11.sp,
+                textAlign = TextAlign.Center
+            )
         }
     }
 }

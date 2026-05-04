@@ -38,31 +38,49 @@ fun RestaurantApp() {
         // AUTH
         // ─────────────────────────────────────────
         composable(Screen.Login.route) {
-            LoginScreen(onRoleSelected = { role ->
-                // Giả lập tạo User object sau khi đăng nhập thành công
-                val mockUser = User(
-                    id = "U${System.currentTimeMillis()}",
-                    name = if(role == UserRole.CUSTOMER) "Khách Hàng Mới" else "Nhân Viên",
-                    phone = "09xxx",
-                    role = role
-                )
-                currentUser = mockUser
+            LoginScreen(
+                onRoleSelected = { role ->
+                    // Giả lập tạo User object sau khi đăng nhập thành công
+                    val mockUser = User(
+                        id = "U${System.currentTimeMillis()}",
+                        name = if(role == UserRole.CUSTOMER) "Khách Hàng Mới" else "Nhân Viên",
+                        phone = "09xxx",
+                        role = role
+                    )
+                    currentUser = mockUser
 
-                when (role) {
-                    UserRole.STAFF, UserRole.MANAGER ->
-                        navController.navigate(Screen.StaffFloorPlan.route) {
-                            popUpTo(Screen.CustomerHome.route) { inclusive = true }
-                        }
-                    UserRole.KITCHEN ->
-                        navController.navigate(Screen.StaffKitchen.route) {
-                            popUpTo(Screen.CustomerHome.route) { inclusive = true }
-                        }
-                    UserRole.CUSTOMER ->
-                        navController.navigate(Screen.CustomerProfile.route) {
-                            popUpTo(Screen.Login.route) { inclusive = true }
-                        }
+                    when (role) {
+                        UserRole.STAFF, UserRole.MANAGER ->
+                            navController.navigate(Screen.StaffFloorPlan.route) {
+                                popUpTo(Screen.CustomerHome.route) { inclusive = true }
+                            }
+                        UserRole.KITCHEN ->
+                            navController.navigate(Screen.StaffKitchen.route) {
+                                popUpTo(Screen.CustomerHome.route) { inclusive = true }
+                            }
+                        UserRole.CUSTOMER ->
+                            navController.navigate(Screen.CustomerProfile.route) {
+                                popUpTo(Screen.Login.route) { inclusive = true }
+                            }
+                    }
+                },
+                onNavigateToRegister = {
+                    navController.navigate(Screen.Register.route)
                 }
-            })
+            )
+        }
+
+        composable(Screen.Register.route) {
+            RegisterScreen(
+                onRegisterSuccess = {
+                    navController.navigate(Screen.Login.route) {
+                        popUpTo(Screen.Register.route) { inclusive = true }
+                    }
+                },
+                onBackToLogin = {
+                    navController.popBackStack()
+                }
+            )
         }
 
         // ─────────────────────────────────────────
