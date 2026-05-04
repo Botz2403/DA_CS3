@@ -77,6 +77,7 @@ dependencies {
     implementation(libs.retrofit)
     implementation(libs.retrofit.gson)
     implementation(libs.gson)
+    implementation(libs.androidx.tv.material)
 
     // Tests
     testImplementation(libs.junit)
