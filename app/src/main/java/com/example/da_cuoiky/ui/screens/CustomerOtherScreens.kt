@@ -20,6 +20,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.navigation.NavController
+import com.example.da_cuoiky.fiebase.AuthViewModel
+import com.example.da_cuoiky.fiebase.ProfileUiState
+import com.example.da_cuoiky.fiebase.UserProfile
 import com.example.da_cuoiky.model.*
 import com.example.da_cuoiky.ui.theme.*
 
@@ -406,11 +410,21 @@ private fun BookingSuccessScreen(reservation: Reservation, onDone: () -> Unit) {
 
 @Composable
 fun CustomerProfileScreen(
-    user: User?,
+    navController: NavController,
+    viewModel: AuthViewModel,
     onBack: () -> Unit,
     onNavigateToLogin: () -> Unit,
     onLogout: () -> Unit
 ) {
+    // Chỉ fetch nếu chưa có data — tránh gọi Firestore 2 lần sau login
+    val profileState by viewModel.profileState.collectAsState()
+    LaunchedEffect(Unit) {
+        if (profileState !is ProfileUiState.Success) {
+            viewModel.loadUserProfile()
+        }
+    }
+
+
     Scaffold(
         topBar = { CustomerTopBar(title = "Hồ Sơ Cá Nhân", onBack = onBack) }
     ) { padding ->
@@ -418,7 +432,7 @@ fun CustomerProfileScreen(
             modifier = Modifier.padding(padding),
             contentPadding = PaddingValues(bottom = 24.dp)
         ) {
-            // Profile header
+            // ── Header profile ──────────────────────────────────────────────
             item {
                 Box(
                     modifier = Modifier
@@ -431,80 +445,135 @@ fun CustomerProfileScreen(
                 ) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Box(
-                            modifier = Modifier.size(80.dp).clip(CircleShape)
+                            modifier = Modifier
+                                .size(80.dp)
+                                .clip(CircleShape)
                                 .background(Color.White.copy(alpha = 0.2f)),
                             contentAlignment = Alignment.Center
                         ) {
-                            Icon(Icons.Default.Person, null, tint = Color.White,
-                                modifier = Modifier.size(48.dp))
+                            Icon(
+                                Icons.Default.Person, null,
+                                tint = Color.White,
+                                modifier = Modifier.size(48.dp)
+                            )
                         }
                         Spacer(modifier = Modifier.height(12.dp))
-                        
-                        if (user != null) {
-                            Text(user.name, style = MaterialTheme.typography.headlineSmall,
-                                fontWeight = FontWeight.ExtraBold, color = Color.White)
-                            Text(user.phone, color = Color.White.copy(alpha = 0.85f))
-                            Spacer(modifier = Modifier.height(12.dp))
-                            Surface(color = Color.White.copy(alpha = 0.15f),
-                                shape = RoundedCornerShape(12.dp)) {
-                                Row(modifier = Modifier.padding(horizontal = 20.dp, vertical = 10.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                    Icon(Icons.Default.Stars, null, tint = WarningColor,
-                                        modifier = Modifier.size(20.dp))
-                                    Text("${user.loyaltyPoints} điểm tích lũy",
-                                        color = Color.White, fontWeight = FontWeight.Bold)
+
+                        when (val state = profileState) {
+                            is ProfileUiState.Loading -> {
+                                CircularProgressIndicator(
+                                    color = Color.White,
+                                    modifier = Modifier.size(28.dp),
+                                    strokeWidth = 2.5.dp
+                                )
+                            }
+                            is ProfileUiState.Success -> {
+                                val profile = state.profile
+                                Text(
+                                    profile.fullName,
+                                    style = MaterialTheme.typography.headlineSmall,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    color = Color.White
+                                )
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(
+                                    profile.email,
+                                    color = Color.White.copy(alpha = 0.85f),
+                                    style = MaterialTheme.typography.bodyMedium
+                                )
+                                if (profile.phone.isNotEmpty()) {
+                                    Text(
+                                        profile.phone,
+                                        color = Color.White.copy(alpha = 0.70f),
+                                        style = MaterialTheme.typography.bodySmall
+                                    )
+                                }
+                                Spacer(modifier = Modifier.height(12.dp))
+                                Surface(
+                                    color = Color.White.copy(alpha = 0.15f),
+                                    shape = RoundedCornerShape(12.dp)
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(horizontal = 20.dp, vertical = 10.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        Icon(
+                                            Icons.Default.Stars, null,
+                                            tint = WarningColor,
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                        Text(
+                                            "Khách hàng thân thiết",
+                                            color = Color.White,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
                                 }
                             }
-                        } else {
-                            Text("Chào mừng bạn!", style = MaterialTheme.typography.headlineSmall,
-                                fontWeight = FontWeight.ExtraBold, color = Color.White)
-                            Text("Đăng nhập để nhận ưu đãi", color = Color.White.copy(alpha = 0.85f))
-                            Spacer(modifier = Modifier.height(16.dp))
-                            Button(
-                                onClick = onNavigateToLogin,
-                                colors = ButtonDefaults.buttonColors(containerColor = Color.White),
-                                shape = RoundedCornerShape(10.dp)
-                            ) {
-                                Text("Đăng Nhập", color = PrimaryColor, fontWeight = FontWeight.Bold)
+                            is ProfileUiState.Error -> {
+                                Text(
+                                    "Chào mừng bạn!",
+                                    style = MaterialTheme.typography.headlineSmall,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    color = Color.White
+                                )
+                                Text(
+                                    state.message,
+                                    color = Color.White.copy(alpha = 0.70f),
+                                    style = MaterialTheme.typography.bodySmall
+                                )
                             }
                         }
                     }
                 }
             }
 
-            // Loyalty progress
-            if (user != null) {
+            // ── Thông tin tài khoản (chỉ hiện khi load xong) ────────────────
+            if (profileState is ProfileUiState.Success) {
+                val profile = (profileState as ProfileUiState.Success).profile
                 item {
-                    Card(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                        shape = RoundedCornerShape(16.dp)) {
+                    Card(
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                        shape = RoundedCornerShape(16.dp)
+                    ) {
                         Column(modifier = Modifier.padding(16.dp)) {
-                            Row(modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween) {
-                                Text("🥇 Thành Viên Vàng", fontWeight = FontWeight.Bold)
-                                Text("${user.loyaltyPoints} / 500 điểm",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.outline)
-                            }
-                            Spacer(modifier = Modifier.height(8.dp))
-                            LinearProgressIndicator(
-                                progress = { 0.7f },
-                                modifier = Modifier.fillMaxWidth().height(8.dp).clip(RoundedCornerShape(4.dp)),
-                                color = WarningColor,
-                                trackColor = WarningColor.copy(alpha = 0.2f)
+                            Text(
+                                "Thông tin tài khoản",
+                                fontWeight = FontWeight.Bold,
+                                style = MaterialTheme.typography.titleMedium
+                            )
+                            Spacer(modifier = Modifier.height(12.dp))
+                            ProfileInfoRow(
+                                icon  = Icons.Default.Person,
+                                label = "Họ và tên",
+                                value = profile.fullName
+                            )
+                            HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                            ProfileInfoRow(
+                                icon  = Icons.Default.Email,
+                                label = "Email",
+                                value = profile.email
+                            )
+                            HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                            ProfileInfoRow(
+                                icon  = Icons.Default.Phone,
+                                label = "Số điện thoại",
+                                value = profile.phone.ifEmpty { "Chưa cập nhật" }
                             )
                         }
                     }
                 }
             }
 
-            // Menu options
+            // ── Menu options ──────────────────────────────────────────────────
             item {
-                Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                    verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    
-                    if (user != null) {
-                        ProfileMenuItem(Icons.Default.History, "Lịch sử đơn hàng", "Xem lại các đơn đã đặt")
+                Column(
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                    verticalArrangement = Arrangement.spacedBy(2.dp)
+                ) {
+                    if (profileState is ProfileUiState.Success) {
+                        ProfileMenuItem(Icons.Default.History, "Lịch sử đơn hàng", "Đơn đã đặt")
                         ProfileMenuItem(Icons.Default.TableBar, "Đặt bàn của tôi", "Quản lý lịch hẹn")
                         ProfileMenuItem(Icons.Default.LocationOn, "Địa chỉ giao hàng", "Sửa địa chỉ mặc định")
                         ProfileMenuItem(Icons.Default.CreditCard, "Phương thức thanh toán", "Quản lý thẻ, ví")
@@ -512,20 +581,24 @@ fun CustomerProfileScreen(
 
                     ProfileMenuItem(Icons.Default.Notifications, "Thông báo", "Cập nhật khuyến mãi")
                     ProfileMenuItem(Icons.Default.Help, "Hỗ trợ & Góp ý", "Liên hệ với chúng tôi")
-                    
-                    if (user != null) {
+
+                    if (profileState is ProfileUiState.Success) {
+                        Spacer(modifier = Modifier.height(8.dp))
                         ProfileMenuItem(
-                            icon = Icons.Default.Logout, 
-                            title = "Đăng xuất", 
-                            subtitle = "Thoát tài khoản hiện tại", 
+                            icon          = Icons.Default.Logout,
+                            title         = "Đăng xuất",
+                            subtitle      = "Thoát tài khoản hiện tại",
                             isDestructive = true,
-                            onClick = onLogout
+                            onClick       = {
+                                viewModel.logout()
+                                onLogout()
+                            }
                         )
-                    } else {
+                    } else if (profileState is ProfileUiState.Error) {
                         ProfileMenuItem(
-                            icon = Icons.Default.Login, 
-                            title = "Đăng nhập", 
-                            subtitle = null, // ĐÃ BỎ SUBTITLE THEO Ý BẠN
+                            icon    = Icons.Default.Login,
+                            title   = "Đăng nhập",
+                            subtitle = null,
                             onClick = onNavigateToLogin
                         )
                     }
@@ -567,6 +640,39 @@ private fun ProfileMenuItem(
             }
             Icon(Icons.Default.ChevronRight, null,
                 tint = MaterialTheme.colorScheme.outline, modifier = Modifier.size(20.dp))
+        }
+    }
+}
+
+// ── Hàng thông tin (icon + label + value) ────────────────────────────────────
+@Composable
+private fun ProfileInfoRow(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    label: String,
+    value: String
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = label,
+            tint = PrimaryColor,
+            modifier = Modifier.size(20.dp)
+        )
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.outline
+            )
+            Text(
+                text = value,
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.Medium
+            )
         }
     }
 }

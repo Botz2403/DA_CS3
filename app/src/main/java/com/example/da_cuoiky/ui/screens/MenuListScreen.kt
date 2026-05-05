@@ -45,9 +45,9 @@ fun MenuListScreen(
     // SỬA LỖI: Kiểm tra null an toàn khi lọc
     val filteredItems = menuItems.filter { item ->
         val itemName = item.name ?: ""
-        val itemCatId = item.categoryId.toString()
+        val itemCategory = item.category ?: "Khác"
 
-        val matchCategory = selectedCategory == "Tất cả" || itemCatId == selectedCategory
+        val matchCategory = selectedCategory == "Tất cả" || itemCategory == selectedCategory
         val matchSearch = itemName.contains(searchQuery, ignoreCase = true)
         matchCategory && matchSearch
     }
@@ -96,7 +96,7 @@ fun MenuListScreen(
                     }
 
                     item {
-                        val categories = listOf("Tất cả") + menuItems.map { it.categoryId.toString() }.distinct()
+                        val categories = listOf("Tất cả") + menuItems.map { it.category ?: "Khác" }.distinct()
                         LazyRow(
                             contentPadding = PaddingValues(horizontal = 16.dp),
                             horizontalArrangement = Arrangement.spacedBy(8.dp)

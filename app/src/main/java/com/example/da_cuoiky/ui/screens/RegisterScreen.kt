@@ -30,6 +30,7 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.da_cuoiky.fiebase.AuthViewModel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -73,6 +74,7 @@ private fun strengthColor(score: Int) = when {
 
 @Composable
 fun RegisterScreen(
+    viewModel: AuthViewModel,
     onRegisterSuccess: () -> Unit = {},
     onBackToLogin: () -> Unit = {}
 ) {
@@ -518,13 +520,28 @@ fun RegisterScreen(
                             }
                             isLoading = true
                             feedbackMessage = null
-                            scope.launch {
-                                delay(1800)
+                            isError = false
+
+                            // ✅ Gọi Firebase Auth thật sự
+                            viewModel.register(
+                                email    = email,
+                                password = password,
+                                fullName = fullName,
+                                phone    = phone
+                            ) { success, errorMsg ->
                                 isLoading = false
-                                feedbackMessage = "Đăng ký thành công! Chào mừng bạn đến với Gourmet Hub 🎉"
-                                isError = false
-                                delay(1500)
-                                onRegisterSuccess()
+                                if (success) {
+                                    feedbackMessage = "Đăng ký thành công! Chào mừng bạn đến với Gourmet Hub 🎉"
+                                    isError = false
+                                    // Chờ 1.5s để user đọc thông báo rồi mới chuyển màn
+                                    scope.launch {
+                                        delay(1500)
+                                        onRegisterSuccess()
+                                    }
+                                } else {
+                                    feedbackMessage = errorMsg
+                                    isError = true
+                                }
                             }
                         },
                         modifier = Modifier

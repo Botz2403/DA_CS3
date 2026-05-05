@@ -21,8 +21,9 @@ sealed class Screen(val route: String) {
     object StaffProfile : Screen("staff/profile")
 
     // Customer Flow
-    object CustomerHome : Screen("customer/home")
-    object CustomerMenu : Screen("customer/menu")
+    object CustomerHome    : Screen("customer/home")
+    object CustomerMain    : Screen("customer/main")       // ← Màn chính có BottomBar
+    object CustomerMenu    : Screen("customer/menu")
     object ProductDetail : Screen("customer/product/{itemId}") {
         fun buildRoute(itemId: String) = "customer/product/$itemId"
     }

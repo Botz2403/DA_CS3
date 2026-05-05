@@ -6,7 +6,9 @@ import retrofit2.converter.gson.GsonConverterFactory
 
 object RetrofitClient {
     // 10.0.2.2 trỏ về localhost của máy tính khi dùng máy ảo Android
-    private const val BASE_URL = "http://10.0.2.2/WEB_ADMIN/"
+    private const val BASE_URL = "http://10.0.2.2/web_admin/"
+    //private const val BASE_URL = "http://192.168.2.147/web_admin/"
+
 
     private val gson = GsonBuilder()
         .setLenient()

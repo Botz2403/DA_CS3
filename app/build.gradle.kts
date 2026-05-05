@@ -73,16 +73,20 @@ dependencies {
     implementation("com.google.firebase:firebase-auth")
     implementation("com.google.firebase:firebase-firestore")
 
+    // Google Sign-In
+    implementation("com.google.android.gms:play-services-auth:21.2.0")
+
+    // Facebook Login
+    implementation("com.facebook.android:facebook-login:17.0.1")
+
     // Networking (Retrofit + GSON)
     implementation(libs.retrofit)
     implementation(libs.retrofit.gson)
     implementation(libs.gson)
- main
     implementation ("com.squareup.retrofit2:retrofit:2.9.0")
     implementation ("com.squareup.retrofit2:converter-gson:2.9.0") // Chuyển đổi JSON sang Object
 
     implementation(libs.androidx.tv.material)
- main
     // Tests
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)

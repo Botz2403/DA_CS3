@@ -1,5 +1,8 @@
 package com.example.da_cuoiky.ui.screens
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.ActivityResultRegistryOwner
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.Image
@@ -10,10 +13,14 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
+import androidx.compose.material.icons.filled.VpnKey
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -26,6 +33,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shadow
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -34,10 +42,19 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.navigation.NavController
 import com.example.da_cuoiky.R
+import com.example.da_cuoiky.fiebase.AuthViewModel
 import com.example.da_cuoiky.model.UserRole
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
+import com.example.da_cuoiky.navigation.Screen
+import com.google.android.gms.auth.api.signin.GoogleSignIn
+import com.google.android.gms.auth.api.signin.GoogleSignInOptions
+import com.google.android.gms.common.api.ApiException
+import com.facebook.CallbackManager
+import com.facebook.FacebookCallback
+import com.facebook.FacebookException
+import com.facebook.login.LoginManager
+import com.facebook.login.LoginResult
 
 // ── Màu sắc chủ đạo ──────────────────────────────────────────────────────────
 private val GradientStart   = Color(0xFFFF7043)   // cam đậm
@@ -52,6 +69,8 @@ private val ErrorRed        = Color(0xFFDC2626)
 
 @Composable
 fun LoginScreen(
+    navController : NavController,
+    viewModel : AuthViewModel,
     onRoleSelected: (UserRole) -> Unit,
     onNavigateToRegister: () -> Unit = {}
 ) {
@@ -61,8 +80,90 @@ fun LoginScreen(
     var isLoading       by remember { mutableStateOf(false) }
     var feedbackMessage by remember { mutableStateOf<String?>(null) }
     var isError         by remember { mutableStateOf(false) }
+    var showForgotDialog by remember { mutableStateOf(false) }
 
-    val scope = rememberCoroutineScope()
+    // ── Google Sign-In setup ─────────────────────────────────────────
+    val context = LocalContext.current
+    var googleLoading by remember { mutableStateOf(false) }
+
+    // Web Client ID lấy từ Firebase Console → Project Settings → Your apps → Web
+    val webClientId = context.getString(R.string.default_web_client_id)
+
+    val googleSignInClient = remember {
+        val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
+            .requestIdToken(webClientId)
+            .requestEmail()
+            .requestProfile()
+            .build()
+        GoogleSignIn.getClient(context, gso)
+    }
+
+    val googleLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        val task = GoogleSignIn.getSignedInAccountFromIntent(result.data)
+        try {
+            val account = task.getResult(ApiException::class.java)
+            val idToken  = account?.idToken
+            if (idToken != null) {
+                googleLoading = true
+                viewModel.signInWithGoogle(idToken) { success, errorMsg ->
+                    googleLoading = false
+                    if (success) {
+                        navController.navigate(Screen.CustomerMain.route) {
+                            popUpTo(Screen.Login.route) { inclusive = true }
+                        }
+                    } else {
+                        feedbackMessage = errorMsg ?: "Đăng nhập Google thất bại!"
+                        isError = true
+                    }
+                }
+            } else {
+                feedbackMessage = "Không lấy được token từ Google."
+                isError = true
+            }
+        } catch (e: ApiException) {
+            if (e.statusCode != 12501) { // 12501 = user đóng dialog, không hiện lỗi
+                feedbackMessage = "Đăng nhập Google thất bại (mã ${e.statusCode})"
+                isError = true
+            }
+        }
+    }
+
+    // ── Facebook Sign-In setup ────────────────────────────────────────────────
+    var facebookLoading by remember { mutableStateOf(false) }
+    val callbackManager = remember { CallbackManager.Factory.create() }
+
+    DisposableEffect(Unit) {
+        LoginManager.getInstance().registerCallback(callbackManager,
+            object : FacebookCallback<LoginResult> {
+                override fun onSuccess(loginResult: LoginResult) {
+                    facebookLoading = true
+                    val token = loginResult.accessToken.token
+                    viewModel.signInWithFacebook(token) { success, errorMsg ->
+                        facebookLoading = false
+                        if (success) {
+                            navController.navigate(Screen.CustomerMain.route) {
+                                popUpTo(Screen.Login.route) { inclusive = true }
+                            }
+                        } else {
+                            feedbackMessage = errorMsg ?: "Đăng nhập Facebook thất bại!"
+                            isError = true
+                        }
+                    }
+                }
+                override fun onCancel() { 
+                    facebookLoading = false
+                }
+                override fun onError(error: FacebookException) {
+                    facebookLoading = false
+                    feedbackMessage = "Đăng nhập Facebook thất bại: ${error.message}"
+                    isError = true
+                }
+            }
+        )
+        onDispose { LoginManager.getInstance().unregisterCallback(callbackManager) }
+    }
 
     // ── Animate logo scale on entry ────────────────────────────────────────
     val logoScale by animateFloatAsState(
@@ -101,6 +202,21 @@ fun LoginScreen(
                 )
             )
     ) {
+        // ── Nút quay lại (cho khách vãng lai) ─────────────────────────────
+        IconButton(
+            onClick = { navController.popBackStack() },
+            modifier = Modifier
+                .align(Alignment.TopStart)
+                .padding(8.dp)
+        ) {
+            Icon(
+                imageVector = Icons.Default.Close,
+                contentDescription = "Quay lại",
+                tint = Color.White.copy(alpha = 0.8f),
+                modifier = Modifier.size(28.dp)
+            )
+        }
+
         // ── Decorative blurred circles ─────────────────────────────────────
         Box(
             modifier = Modifier
@@ -274,10 +390,7 @@ fun LoginScreen(
 
                     // ── Quên mật khẩu ────────────────────────────────────
                     TextButton(
-                        onClick = {
-                            feedbackMessage = "Chức năng này yêu cầu Firebase thật."
-                            isError = false
-                        },
+                        onClick = { showForgotDialog = true },
                         modifier = Modifier.align(Alignment.End),
                         enabled = !isLoading
                     ) {
@@ -286,6 +399,15 @@ fun LoginScreen(
                             color = GradientMid,
                             fontWeight = FontWeight.SemiBold,
                             fontSize = 13.sp
+                        )
+                    }
+
+                    // ── Dialog quên mật khẩu ─────────────────────────────
+                    if (showForgotDialog) {
+                        ForgotPasswordDialog(
+                            prefillEmail = email,   // tự điền nếu user đã gõ email
+                            viewModel    = viewModel,
+                            onDismiss    = { showForgotDialog = false }
                         )
                     }
 
@@ -335,20 +457,16 @@ fun LoginScreen(
                             }
                             isLoading = true
                             feedbackMessage = null
-                            scope.launch {
-                                delay(1500)
+                            isError = false
+                            viewModel.login(email, password) { success ->
                                 isLoading = false
-                                when {
-                                    email == "staff@test.com" && password == "123456" -> {
-                                        onRoleSelected(UserRole.STAFF)
+                                if (success) {
+                                    navController.navigate(Screen.CustomerMain.route) {
+                                        popUpTo(Screen.Login.route) { inclusive = true }
                                     }
-                                    email == "user@test.com" && password == "123456" -> {
-                                        onRoleSelected(UserRole.CUSTOMER)
-                                    }
-                                    else -> {
-                                        feedbackMessage = "Email hoặc mật khẩu không đúng!\n(Thử: staff@test.com hoặc user@test.com)"
-                                        isError = true
-                                    }
+                                } else {
+                                    feedbackMessage = "Email hoặc mật khẩu không đúng!"
+                                    isError = true
                                 }
                             }
                         },
@@ -422,12 +540,17 @@ fun LoginScreen(
                         horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
                         OutlinedButton(
-                            onClick = { /* Demo Google */ },
+                            onClick = {
+                                // Xóa session cũ (tránh auto-sign-in lại account cũ)
+                                googleSignInClient.signOut().addOnCompleteListener {
+                                    googleLauncher.launch(googleSignInClient.signInIntent)
+                                }
+                            },
                             modifier = Modifier
                                 .weight(1f)
                                 .height(50.dp),
                             shape = RoundedCornerShape(14.dp),
-                            enabled = !isLoading,
+                            enabled = !isLoading && !googleLoading,
                             border = ButtonDefaults.outlinedButtonBorder.copy(width = 1.dp),
                             colors = ButtonDefaults.outlinedButtonColors(
                                 containerColor = Color(0xFFF9FAFB)
@@ -450,12 +573,21 @@ fun LoginScreen(
                         }
 
                         OutlinedButton(
-                            onClick = { /* Demo Facebook */ },
+                            onClick = {
+                                (context as? ActivityResultRegistryOwner)?.let { registryOwner ->
+                                    facebookLoading = true
+                                    LoginManager.getInstance().logInWithReadPermissions(
+                                        registryOwner,
+                                        callbackManager,
+                                        listOf("email", "public_profile")
+                                    )
+                                }
+                            },
                             modifier = Modifier
                                 .weight(1f)
                                 .height(50.dp),
                             shape = RoundedCornerShape(14.dp),
-                            enabled = !isLoading,
+                            enabled = !isLoading && !googleLoading && !facebookLoading,
                             border = ButtonDefaults.outlinedButtonBorder.copy(width = 1.dp),
                             colors = ButtonDefaults.outlinedButtonColors(
                                 containerColor = Color(0xFFF9FAFB)
@@ -512,4 +644,130 @@ fun LoginScreen(
             )
         }
     }
+}
+
+// ── Dialog Quên Mật Khẩu ─────────────────────────────────────────────────────
+@Composable
+fun ForgotPasswordDialog(
+    prefillEmail: String = "",
+    viewModel: AuthViewModel,
+    onDismiss: () -> Unit
+) {
+    var resetEmail   by remember { mutableStateOf(prefillEmail) }
+    var isLoading    by remember { mutableStateOf(false) }
+    var resultMsg    by remember { mutableStateOf<String?>(null) }
+    var isSuccess    by remember { mutableStateOf(false) }
+
+    AlertDialog(
+        onDismissRequest = { if (!isLoading) onDismiss() },
+        shape            = RoundedCornerShape(20.dp),
+        icon             = {
+            Icon(
+                imageVector = Icons.Default.VpnKey,
+                contentDescription = null,
+                tint   = GradientMid,
+                modifier = Modifier.size(36.dp)
+            )
+        },
+        title = {
+            Text(
+                text       = "Quên mật khẩu?",
+                fontWeight = FontWeight.ExtraBold,
+                textAlign  = TextAlign.Center
+            )
+        },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                if (!isSuccess) {
+                    Text(
+                        text  = "Nhập email đã đăng ký. Chúng tôi sẽ gửi link đặt lại mật khẩu ngay.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center
+                    )
+                    OutlinedTextField(
+                        value         = resetEmail,
+                        onValueChange = { resetEmail = it; resultMsg = null },
+                        label         = { Text("Email") },
+                        leadingIcon   = { Icon(Icons.Default.Email, null, tint = GradientMid) },
+                        singleLine    = true,
+                        enabled       = !isLoading,
+                        shape         = RoundedCornerShape(12.dp),
+                        modifier      = Modifier.fillMaxWidth(),
+                        colors        = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor   = GradientMid,
+                            focusedLabelColor    = GradientMid,
+                            cursorColor          = GradientMid
+                        )
+                    )
+                }
+
+                // Kết quả
+                resultMsg?.let { msg ->
+                    Row(
+                        verticalAlignment    = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Icon(
+                            imageVector = if (isSuccess) Icons.Default.Check
+                                          else Icons.Default.Warning,
+                            contentDescription = null,
+                            tint = if (isSuccess) Color(0xFF2E7D32) else Color(0xFFD32F2F),
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Text(
+                            text  = msg,
+                            color = if (isSuccess) Color(0xFF2E7D32) else Color(0xFFD32F2F),
+                            style = MaterialTheme.typography.bodySmall,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+                }
+
+                // Loading
+                if (isLoading) {
+                    LinearProgressIndicator(
+                        modifier = Modifier.fillMaxWidth(),
+                        color    = GradientMid
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            if (isSuccess) {
+                // Đã gửi xong → chỉ hiện nút Đóng
+                TextButton(onClick = onDismiss) {
+                    Text("Đóng", fontWeight = FontWeight.Bold, color = GradientMid)
+                }
+            } else {
+                TextButton(
+                    enabled = !isLoading && resetEmail.isNotBlank(),
+                    onClick = {
+                        isLoading = true
+                        resultMsg = null
+                        viewModel.resetPassword(resetEmail.trim()) { success, errorMsg ->
+                            isLoading = false
+                            isSuccess = success
+                            resultMsg = if (success)
+                                "✅ Email đã được gửi! Kiểm tra hộp thư (kể cả Spam)."
+                            else
+                                errorMsg
+                        }
+                    }
+                ) {
+                    Text("Gửi link", fontWeight = FontWeight.Bold, color = GradientMid)
+                }
+            }
+        },
+        dismissButton = {
+            if (!isSuccess) {
+                TextButton(
+                    onClick  = onDismiss,
+                    enabled  = !isLoading
+                ) {
+                    Text("Huỷ", color = MaterialTheme.colorScheme.outline)
+                }
+            }
+        }
+    )
 }

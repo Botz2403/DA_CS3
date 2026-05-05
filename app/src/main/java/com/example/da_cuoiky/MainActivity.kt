@@ -4,9 +4,11 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.runtime.*
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import com.example.da_cuoiky.fiebase.AuthViewModel
 import com.example.da_cuoiky.model.*
 import com.example.da_cuoiky.navigation.Screen
 import com.example.da_cuoiky.ui.screens.*
@@ -15,6 +17,22 @@ import com.example.da_cuoiky.ui.theme.DA_CuoiKyTheme
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        
+        // ── In Key Hash ra Logcat cho Facebook ──
+        try {
+            val info = packageManager.getPackageInfo(
+                "com.example.da_cuoiky",
+                android.content.pm.PackageManager.GET_SIGNATURES
+            )
+            for (signature in info.signatures) {
+                val md = java.security.MessageDigest.getInstance("SHA")
+                md.update(signature.toByteArray())
+                val keyHash = android.util.Base64.encodeToString(md.digest(), android.util.Base64.DEFAULT)
+                android.util.Log.d("FACEBOOK_KEY_HASH", keyHash)
+            }
+        } catch (e: Exception) { }
+        // ────────────────────────────────────────
+
         setContent {
             DA_CuoiKyTheme {
                 RestaurantApp()
@@ -25,54 +43,39 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 fun RestaurantApp() {
+    // Khởi tạo AuthViewModel dùng chung toàn app
+    val authViewModel: AuthViewModel = viewModel()
     val navController = rememberNavController()
-    // currentUser = null nghĩa là chưa đăng nhập (khách vãng lai)
     var currentUser by remember { mutableStateOf<User?>(null) }
     var cartItems by remember { mutableStateOf<List<OrderItem>>(emptyList()) }
 
+    // Luôn vào giao diện chính — khách vãng lai có thể xem, login ở tab Hồ sơ
+    val startDestination = Screen.CustomerMain.route
+
     NavHost(
         navController = navController,
-        startDestination = Screen.CustomerHome.route
+        startDestination = startDestination
     ) {
         // ─────────────────────────────────────────
         // AUTH
         // ─────────────────────────────────────────
         composable(Screen.Login.route) {
             LoginScreen(
-                onRoleSelected = { role ->
-                    // Giả lập tạo User object sau khi đăng nhập thành công
-                    val mockUser = User(
-                        id = "U${System.currentTimeMillis()}",
-                        name = if(role == UserRole.CUSTOMER) "Khách Hàng Mới" else "Nhân Viên",
-                        phone = "09xxx",
-                        role = role
-                    )
-                    currentUser = mockUser
-
-                    when (role) {
-                        UserRole.STAFF, UserRole.MANAGER ->
-                            navController.navigate(Screen.StaffFloorPlan.route) {
-                                popUpTo(Screen.CustomerHome.route) { inclusive = true }
-                            }
-                        UserRole.KITCHEN ->
-                            navController.navigate(Screen.StaffKitchen.route) {
-                                popUpTo(Screen.CustomerHome.route) { inclusive = true }
-                            }
-                        UserRole.CUSTOMER ->
-                            navController.navigate(Screen.CustomerProfile.route) {
-                                popUpTo(Screen.Login.route) { inclusive = true }
-                            }
-                    }
-                },
+                navController        = navController,
+                viewModel            = authViewModel,
+                onRoleSelected       = { /* chưa dùng phân quyền */ },
                 onNavigateToRegister = {
                     navController.navigate(Screen.Register.route)
                 }
             )
+            // LoginScreen tự navigate về Screen.CustomerMain sau khi login thành công
         }
 
         composable(Screen.Register.route) {
             RegisterScreen(
+                viewModel = authViewModel,
                 onRegisterSuccess = {
+                    // Sau đăng ký thành công → về Login để đăng nhập
                     navController.navigate(Screen.Login.route) {
                         popUpTo(Screen.Register.route) { inclusive = true }
                     }
@@ -134,14 +137,24 @@ fun RestaurantApp() {
         // ─────────────────────────────────────────
         // CUSTOMER FLOW
         // ─────────────────────────────────────────
+        // ── Màn chính có Bottom Navigation ──────────────────────────
+        composable(Screen.CustomerMain.route) {
+            CustomerMainScreen(
+                navController  = navController,
+                authViewModel  = authViewModel,
+                initialTab     = CustomerTab.HOME,   // ← mở tab Trang chủ sau login
+                cartItems      = cartItems,
+                onAddToCart    = { item -> cartItems = cartItems + item }
+            )
+        }
+
         composable(Screen.CustomerHome.route) {
-            CustomerHomeScreen(
-                user = currentUser, // ĐÃ THÊM THAM SỐ CÒN THIẾU
-                onMenuClick = { navController.navigate(Screen.CustomerMenu.route) },
-                onBookingClick = { navController.navigate(Screen.CustomerBooking.route) },
-                onOrdersClick = { navController.navigate(Screen.OrderTracking.buildRoute("O1001")) },
-                onProfileClick = { navController.navigate(Screen.CustomerProfile.route) },
-                onProductClick = { itemId -> navController.navigate(Screen.ProductDetail.buildRoute(itemId)) }
+            CustomerMainScreen(
+                navController  = navController,
+                authViewModel  = authViewModel,
+                initialTab     = CustomerTab.HOME,
+                cartItems      = cartItems,
+                onAddToCart    = { item -> cartItems = cartItems + item }
             )
         }
 
@@ -205,10 +218,16 @@ fun RestaurantApp() {
 
         composable(Screen.CustomerProfile.route) {
             CustomerProfileScreen(
-                user = currentUser,
-                onBack = { navController.popBackStack() },
+                navController     = navController,
+                viewModel         = authViewModel,
+                onBack            = { navController.popBackStack() },
                 onNavigateToLogin = { navController.navigate(Screen.Login.route) },
-                onLogout = { currentUser = null }
+                onLogout          = {
+                    // Firebase logout đã được gọi trong ProfileScreen
+                    navController.navigate(Screen.Login.route) {
+                        popUpTo(0) { inclusive = true }  // xóa toàn bộ back stack
+                    }
+                }
             )
         }
     }

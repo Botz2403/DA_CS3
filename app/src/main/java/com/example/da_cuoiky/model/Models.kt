@@ -96,8 +96,8 @@ data class MenuItem(
     @SerializedName("duong_dan_anh") val imageUrl: String?,
     @SerializedName("mo_ta_ngan") val description: String? = "",
     @SerializedName("trang_thai") val status: String = "dang_ban",
-    
-    val category: String = "Món ăn",
+
+    @SerializedName("ten_danh_muc") val category: String? = "Món ăn",
     val modifiers: List<Modifier> = emptyList(),
     val isAvailable: Boolean = true,
     val prepTime: Int = 10,
@@ -244,7 +244,7 @@ object SampleData {
     val sampleOrder = Order(
         id = "O1001", items = listOf(OrderItem("M01", "Phở Bò Đặc Biệt", 2, 65000))
     )
-    
+
     val customerUser = User(id = "U002", name = "Lan", phone = "098", role = UserRole.CUSTOMER)
 
     val reservations = listOf(

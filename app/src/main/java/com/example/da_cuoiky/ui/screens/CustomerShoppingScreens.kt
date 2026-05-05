@@ -32,7 +32,7 @@ fun CartScreen(
     onCheckout: () -> Unit,
     onBack: () -> Unit
 ) {
-    var deliveryType by remember { mutableStateOf(DeliveryType.DINE_IN) }
+    var deliveryType by remember { mutableStateOf(DeliveryType.PICKUP) }
     var promoCode by remember { mutableStateOf("") }
     var promoApplied by remember { mutableStateOf(false) }
     var localCart by remember { mutableStateOf(cartItems.toMutableList()) }
@@ -62,7 +62,7 @@ fun CartScreen(
                                 fontWeight = FontWeight.Bold)
                             Spacer(modifier = Modifier.height(10.dp))
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                DeliveryType.entries.forEach { type ->
+                                DeliveryType.entries.filter { it != DeliveryType.DINE_IN }.forEach { type ->
                                     FilterChip(
                                         selected = deliveryType == type,
                                         onClick = { deliveryType = type },

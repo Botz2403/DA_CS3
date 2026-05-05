@@ -35,17 +35,7 @@ fun CustomerHomeScreen(
 ) {
     val scrollState = rememberScrollState()
 
-    Scaffold(
-        bottomBar = {
-            CustomerBottomBar(
-                currentRoute = "home",
-                onMenuClick = onMenuClick,
-                onBookingClick = onBookingClick,
-                onOrdersClick = onOrdersClick,
-                onProfileClick = onProfileClick
-            )
-        }
-    ) { padding ->
+    Scaffold { padding ->
         Column(
             modifier = Modifier
                 .padding(padding)
