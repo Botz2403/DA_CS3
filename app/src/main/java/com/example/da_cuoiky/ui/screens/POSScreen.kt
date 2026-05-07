@@ -67,7 +67,7 @@ fun POSScreen(
             // ── Left: Order Summary ───────────────────────────────
             Column(
                 modifier = Modifier
-                    .weight(1f)
+                    .weight(1.3f)
                     .fillMaxHeight()
                     .background(MaterialTheme.colorScheme.surfaceVariant)
             ) {
@@ -113,17 +113,21 @@ fun POSScreen(
                         POSTotalRow("Tạm tính", "%,d ₫".format(order.subtotal))
 
                         // Discount input
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text("Giảm giá:", modifier = Modifier.weight(1f),
-                                style = MaterialTheme.typography.bodyMedium)
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text("Giảm giá:", style = MaterialTheme.typography.bodyMedium)
                             OutlinedTextField(
                                 value = discountInput,
                                 onValueChange = { discountInput = it.filter { c -> c.isDigit() } },
                                 placeholder = { Text("0") },
-                                suffix = { Text("₫") },
-                                modifier = Modifier.width(130.dp),
+                                trailingIcon = { Text("₫", modifier = Modifier.padding(end = 10.dp)) },
+                                modifier = Modifier.width(110.dp).height(50.dp),
                                 shape = RoundedCornerShape(8.dp),
-                                singleLine = true
+                                singleLine = true,
+                                textStyle = androidx.compose.ui.text.TextStyle(fontSize = 14.sp)
                             )
                         }
 
@@ -224,9 +228,20 @@ private fun POSTotalRow(
     style: androidx.compose.ui.text.TextStyle = MaterialTheme.typography.bodyMedium,
     valueColor: Color = MaterialTheme.colorScheme.onSurface
 ) {
-    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
         Text(label, style = style)
-        Text(value, style = style, fontWeight = FontWeight.Bold, color = valueColor)
+        Text(
+            value,
+            style = style,
+            fontWeight = FontWeight.Bold,
+            color = valueColor,
+            maxLines = 1,
+            softWrap = false
+        )
     }
 }
 

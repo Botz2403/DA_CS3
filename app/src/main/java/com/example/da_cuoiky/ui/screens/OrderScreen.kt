@@ -25,6 +25,7 @@ import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.example.da_cuoiky.model.*
 import com.example.da_cuoiky.ui.theme.*
+import kotlinx.coroutines.launch
 
 @Composable
 fun OrderScreen(
@@ -38,10 +39,34 @@ fun OrderScreen(
     var cartItems by remember { mutableStateOf<List<OrderItem>>(emptyList()) }
     var showNoteDialog by remember { mutableStateOf<String?>(null) } // menuItemId
 
-    val filteredMenu = SampleData.menuItems.filter { item ->
+    var menuItems by remember { mutableStateOf<List<MenuItem>>(emptyList()) }
+    var categories by remember { mutableStateOf<List<String>>(listOf("Tất cả")) }
+    var isLoading by remember { mutableStateOf(true) }
+    val coroutineScope = rememberCoroutineScope()
+    var isSubmitting by remember { mutableStateOf(false) }
+    val context = androidx.compose.ui.platform.LocalContext.current
+
+    LaunchedEffect(Unit) {
+        try {
+            val apiService = com.example.da_cuoiky.network.RetrofitClient.instance
+            val items = apiService.getMenuItems()
+            menuItems = items
+            
+            val cats = items.mapNotNull { it.category }.distinct().toMutableList()
+            if (!cats.contains("Tất cả")) cats.add(0, "Tất cả")
+            categories = cats
+        } catch (e: Exception) {
+            e.printStackTrace()
+        } finally {
+            isLoading = false
+        }
+    }
+
+    val filteredMenu = menuItems.filter { item ->
         val matchCategory = selectedCategory == "Tất cả" || item.category == selectedCategory
         val matchSearch = item.name.contains(searchQuery, ignoreCase = true)
-        matchCategory && matchSearch && item.isAvailable
+        // Nếu có isAvailable thì check, nếu API ko trả về thì coi như True
+        matchCategory && matchSearch
     }
 
     val subtotal = cartItems.sumOf { it.totalPrice }
@@ -59,9 +84,9 @@ fun OrderScreen(
             )
         }
     ) { padding ->
-        Row(modifier = Modifier.padding(padding).fillMaxSize()) {
-            // ── Left: Menu Panel ──────────────────────────────────
-            Column(modifier = Modifier.weight(1.6f).fillMaxHeight()) {
+        Column(modifier = Modifier.padding(padding).fillMaxSize()) {
+            // ── Top: Menu Panel ──────────────────────────────────
+            Column(modifier = Modifier.weight(1.3f).fillMaxWidth()) {
                 // Search bar
                 OutlinedTextField(
                     value = searchQuery,
@@ -86,7 +111,7 @@ fun OrderScreen(
                     contentPadding = PaddingValues(horizontal = 12.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    items(SampleData.categories) { cat ->
+                    items(categories) { cat ->
                         FilterChip(
                             selected = selectedCategory == cat,
                             onClick = { selectedCategory = cat },
@@ -127,13 +152,13 @@ fun OrderScreen(
                 }
             }
 
-            VerticalDivider(modifier = Modifier.fillMaxHeight(), thickness = 1.dp)
+            HorizontalDivider(modifier = Modifier.fillMaxWidth(), thickness = 1.dp)
 
-            // ── Right: Cart Panel ─────────────────────────────────
+            // ── Bottom: Cart Panel ─────────────────────────────────
             Column(
                 modifier = Modifier
                     .weight(1f)
-                    .fillMaxHeight()
+                    .fillMaxWidth()
                     .background(MaterialTheme.colorScheme.surfaceVariant)
             ) {
                 Text(
@@ -188,21 +213,47 @@ fun OrderScreen(
                         Spacer(modifier = Modifier.height(12.dp))
                         Button(
                             onClick = {
+                                if (isSubmitting) return@Button
+                                isSubmitting = true
                                 val order = Order(
                                     id = "O${System.currentTimeMillis()}",
                                     tableId = tableId, tableName = tableName,
                                     items = cartItems
                                 )
-                                onSendToKitchen(order)
+                                coroutineScope.launch {
+                                    try {
+                                        val apiService = com.example.da_cuoiky.network.RetrofitClient.instance
+                                        val response = apiService.createOrder(order)
+                                        if (response.isSuccessful && response.body()?.status == "success") {
+                                            android.widget.Toast.makeText(context, "Đã gửi order xuống bếp!", android.widget.Toast.LENGTH_SHORT).show()
+                                            onSendToKitchen(order)
+                                        } else {
+                                            val errMsg = response.body()?.message ?: "Lỗi không xác định"
+                                            android.widget.Toast.makeText(context, errMsg, android.widget.Toast.LENGTH_LONG).show()
+                                            // Fallback để không bị kẹt
+                                            onSendToKitchen(order)
+                                        }
+                                    } catch (e: Exception) {
+                                        e.printStackTrace()
+                                        android.widget.Toast.makeText(context, "Lỗi kết nối: ${e.message}", android.widget.Toast.LENGTH_LONG).show()
+                                        onSendToKitchen(order)
+                                    } finally {
+                                        isSubmitting = false
+                                    }
+                                }
                             },
-                            enabled = cartItems.isNotEmpty(),
+                            enabled = cartItems.isNotEmpty() && !isSubmitting,
                             modifier = Modifier.fillMaxWidth().height(52.dp),
                             shape = RoundedCornerShape(12.dp),
                             colors = ButtonDefaults.buttonColors(containerColor = SuccessColor)
                         ) {
-                            Icon(Icons.Default.OutdoorGrill, null)
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text("GỬI BẾP", fontWeight = FontWeight.Bold)
+                            if (isSubmitting) {
+                                CircularProgressIndicator(color = Color.White, modifier = Modifier.size(24.dp))
+                            } else {
+                                Icon(Icons.Default.OutdoorGrill, null)
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("GỬI BẾP", fontWeight = FontWeight.Bold)
+                            }
                         }
                     }
                 }

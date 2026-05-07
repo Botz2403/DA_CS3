@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">DA_CuoiKy</string>
+    <string name="app_name">GourmetHub</string>
     <!-- Web Client ID từ Firebase (client_type: 3 trong google-services.json) -->
     <string name="default_web_client_id">868066988351-om2bub7ess951jbp0t99lv1jfop6gn97.apps.googleusercontent.com</string>
 

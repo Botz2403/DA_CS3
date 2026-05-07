@@ -92,8 +92,9 @@ fun RestaurantApp() {
         composable(Screen.StaffFloorPlan.route) {
             FloorPlanScreen(
                 onTableClick = { table ->
-                    if (table.status == TableStatus.OCCUPIED && table.currentOrderId.isNotEmpty()) {
-                        navController.navigate(Screen.StaffPOS.buildRoute(table.currentOrderId))
+                    if (table.status == TableStatus.OCCUPIED) {
+                        val targetId = if (table.currentOrderId.isNotEmpty()) table.currentOrderId else "POS_${table.id}"
+                        navController.navigate(Screen.StaffPOS.buildRoute(targetId))
                     }
                 },
                 onNavigateToOrder = { tableId ->
@@ -109,7 +110,7 @@ fun RestaurantApp() {
                 tableId = tableId,
                 tableName = table?.name ?: "Bàn",
                 onSendToKitchen = {
-                    navController.navigate(Screen.StaffKitchen.route)
+                    navController.popBackStack()
                 },
                 onBack = { navController.popBackStack() }
             )

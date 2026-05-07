@@ -174,6 +174,16 @@ data class TableModel(
     }
 }
 
+data class TableApiResponse(
+    val status: String,
+    val data: List<TableModel>?
+)
+
+data class GenericApiResponse(
+    val status: String,
+    val message: String?
+)
+
 data class KitchenOrder(
     val orderId: String,
     val tableName: String,
@@ -208,6 +218,19 @@ data class InventoryItem(
 ) {
     val isLowStock: Boolean get() = qtyOnHand <= lowStockThreshold
 }
+
+data class SyncUserRequest(
+    @SerializedName("uid_firebase") val uid: String,
+    @SerializedName("ho_ten") val name: String,
+    @SerializedName("email") val email: String,
+    @SerializedName("so_dien_thoai") val phone: String? = null
+)
+
+data class SyncUserResponse(
+    val success: Boolean,
+    val message: String
+)
+
 
 // ─────────────────────────────────
 // SAMPLE DATA REPOSITORY
@@ -262,3 +285,22 @@ object SampleData {
         InventoryItem(9, "Sữa đặc (Lon 380g)", "lon", 48.0, 12.0, 18500.0, 5)
     )
 }
+
+// ─────────────────────────────────
+// STAFF LOGIN API MODELS
+// ─────────────────────────────────
+
+data class StaffLoginRequest(val email: String, val password: String)
+
+data class StaffData(
+    val id: String,
+    val name: String,
+    val role: String,
+    val branch: String
+)
+
+data class StaffLoginResponse(
+    val status: String,
+    val message: String,
+    val data: StaffData?
+)

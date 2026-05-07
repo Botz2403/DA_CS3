@@ -14,15 +14,21 @@ class AuthViewModel : ViewModel() {
     val profileState: StateFlow<ProfileUiState> = _profileState
 
     // ── Đăng nhập ─────────────────────────────────────────────────────────────
-    fun login(email: String, password: String, onResult: (Boolean) -> Unit) {
+    fun login(email: String, password: String, onResult: (Boolean, String) -> Unit) {
         viewModelScope.launch {
             val result = repo.login(email, password)
             if (result.isSuccess) {
-                // ✅ Fetch profile ngay sau login → ProfileScreen không cần gọi lại
-                loadUserProfile()
-                onResult(true)
+                // result.getOrNull() chứa role, ví dụ "role:staff" hoặc "role:customer"
+                val roleStr = result.getOrNull() ?: "role:customer"
+                val role = roleStr.removePrefix("role:")
+                
+                // ✅ Fetch profile ngay sau login nếu là customer (tùy chọn)
+                if (role == "customer") {
+                    loadUserProfile()
+                }
+                onResult(true, role)
             } else {
-                onResult(false)
+                onResult(false, "")
             }
         }
     }

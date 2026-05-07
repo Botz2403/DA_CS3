@@ -31,9 +31,24 @@ fun FloorPlanScreen(
     onTableClick: (TableModel) -> Unit,
     onNavigateToOrder: (String) -> Unit
 ) {
-    var tables by remember { mutableStateOf(SampleData.tables) }
+    var tables by remember { mutableStateOf<List<TableModel>>(emptyList()) }
+    var isLoading by remember { mutableStateOf(true) }
     var selectedZone by remember { mutableStateOf<TableZone?>(null) }
     var showLegend by remember { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) {
+        try {
+            val apiService = com.example.da_cuoiky.network.RetrofitClient.instance
+            val response = apiService.getTables()
+            if (response.isSuccessful && response.body()?.status == "success") {
+                tables = response.body()?.data ?: emptyList()
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        } finally {
+            isLoading = false
+        }
+    }
 
     val filteredTables = if (selectedZone == null) tables
                          else tables.filter { it.zone == selectedZone }
@@ -76,12 +91,13 @@ fun FloorPlanScreen(
                     TableTile(
                         table = table,
                         onTap = {
-                            onTableClick(table)
-                            if (table.status == TableStatus.OCCUPIED && table.currentOrderId.isNotEmpty()) {
-                                onNavigateToOrder(table.currentOrderId)
+                            if (table.status == TableStatus.OCCUPIED) {
+                                onTableClick(table)
+                            } else {
+                                onNavigateToOrder(table.id)
                             }
                         },
-                        onDoubleTap = { onNavigateToOrder("new_${table.id}") }
+                        onDoubleTap = { }
                     )
                 }
             }

@@ -10,6 +10,9 @@ sealed class Screen(val route: String) {
     object Register : Screen("register")
 
     // Staff Flow
+    object StaffMain : Screen("staff/main")
+    object KitchenMain : Screen("kitchen/main")
+    
     object StaffFloorPlan : Screen("staff/floor_plan")
     object StaffOrder : Screen("staff/order/{tableId}") {
         fun buildRoute(tableId: String) = "staff/order/$tableId"

@@ -458,11 +458,26 @@ fun LoginScreen(
                             isLoading = true
                             feedbackMessage = null
                             isError = false
-                            viewModel.login(email, password) { success ->
+                            viewModel.login(email, password) { success, role ->
                                 isLoading = false
                                 if (success) {
-                                    navController.navigate(Screen.CustomerMain.route) {
-                                        popUpTo(Screen.Login.route) { inclusive = true }
+                                    if (role == "customer") {
+                                        navController.navigate(Screen.CustomerMain.route) {
+                                            popUpTo(Screen.Login.route) { inclusive = true }
+                                        }
+                                    } else if (role == "staff") {
+                                        navController.navigate(Screen.StaffFloorPlan.route) {
+                                            popUpTo(Screen.Login.route) { inclusive = true }
+                                        }
+                                    } else if (role == "kitchen") {
+                                        navController.navigate(Screen.StaffKitchen.route) {
+                                            popUpTo(Screen.Login.route) { inclusive = true }
+                                        }
+                                    } else {
+                                        // Mặc định hoặc admin
+                                        navController.navigate(Screen.StaffFloorPlan.route) {
+                                            popUpTo(Screen.Login.route) { inclusive = true }
+                                        }
                                     }
                                 } else {
                                     feedbackMessage = "Email hoặc mật khẩu không đúng!"
