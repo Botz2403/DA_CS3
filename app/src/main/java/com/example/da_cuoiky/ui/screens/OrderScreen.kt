@@ -215,28 +215,39 @@ fun OrderScreen(
                             onClick = {
                                 if (isSubmitting) return@Button
                                 isSubmitting = true
-                                val order = Order(
-                                    id = "O${System.currentTimeMillis()}",
-                                    tableId = tableId, tableName = tableName,
-                                    items = cartItems
+                                
+                                val orderRequest = CreateOrderRequest(
+                                    tableId = tableId,
+                                    staffId = "S01",
+                                    totalPrice = subtotal,
+                                    items = cartItems.map { 
+                                        OrderItemRequest(it.menuItemId, it.name, it.qty, it.price, it.note)
+                                    }
                                 )
+
                                 coroutineScope.launch {
                                     try {
                                         val apiService = com.example.da_cuoiky.network.RetrofitClient.instance
-                                        val response = apiService.createOrder(order)
+                                        val response = apiService.createOrder(orderRequest)
                                         if (response.isSuccessful && response.body()?.status == "success") {
-                                            android.widget.Toast.makeText(context, "Đã gửi order xuống bếp!", android.widget.Toast.LENGTH_SHORT).show()
-                                            onSendToKitchen(order)
+                                            android.widget.Toast.makeText(context, "Đã gửi order!", android.widget.Toast.LENGTH_SHORT).show()
+                                            
+                                            // Tạo object Order giả lập từ kết quả API
+                                            val dummyOrder = Order(
+                                                id = response.body()?.orderId ?: "0",
+                                                tableId = tableId,
+                                                staffId = "S01",
+                                                statusStr = "PENDING",
+                                                totalPriceFromApi = subtotal,
+                                                createdAt = ""
+                                            )
+                                            onSendToKitchen(dummyOrder)
                                         } else {
                                             val errMsg = response.body()?.message ?: "Lỗi không xác định"
                                             android.widget.Toast.makeText(context, errMsg, android.widget.Toast.LENGTH_LONG).show()
-                                            // Fallback để không bị kẹt
-                                            onSendToKitchen(order)
                                         }
                                     } catch (e: Exception) {
-                                        e.printStackTrace()
                                         android.widget.Toast.makeText(context, "Lỗi kết nối: ${e.message}", android.widget.Toast.LENGTH_LONG).show()
-                                        onSendToKitchen(order)
                                     } finally {
                                         isSubmitting = false
                                     }

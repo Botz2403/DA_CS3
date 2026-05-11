@@ -1,5 +1,7 @@
 package com.example.da_cuoiky.ui.screens
 
+import android.util.Log
+import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -11,16 +13,27 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.da_cuoiky.model.*
 import com.example.da_cuoiky.ui.theme.*
+import com.example.da_cuoiky.fiebase.AuthViewModel
+import com.example.da_cuoiky.fiebase.ProfileUiState
+import com.google.firebase.auth.FirebaseAuth
+import com.example.da_cuoiky.network.RetrofitClient
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 // ─────────────────────────────────
 // CART SCREEN
@@ -28,24 +41,25 @@ import com.example.da_cuoiky.ui.theme.*
 
 @Composable
 fun CartScreen(
-    cartItems: List<OrderItem> = SampleData.sampleOrder.items,
+    cartItems: List<OrderItem>,
+    authViewModel: AuthViewModel,
+    deliveryType: DeliveryType,
+    onDeliveryTypeChange: (DeliveryType) -> Unit,
+    deliveryAddress: String,
+    onAddressChange: (String) -> Unit,
+    onQtyChange: (OrderItem, Int) -> Unit,
     onCheckout: () -> Unit,
+    onNavigateToLogin: () -> Unit,
     onBack: () -> Unit
 ) {
-    var deliveryType by remember { mutableStateOf(DeliveryType.PICKUP) }
-    var promoCode by remember { mutableStateOf("") }
-    var promoApplied by remember { mutableStateOf(false) }
-    var localCart by remember { mutableStateOf(cartItems.toMutableList()) }
-
-    val discount = if (promoApplied) (localCart.sumOf { it.totalPrice } * 0.20).toInt() else 0
-    val subtotal = localCart.sumOf { it.totalPrice }
-    val deliveryFee = if (deliveryType == DeliveryType.DELIVERY) 20000 else 0
-    val total = subtotal - discount + deliveryFee
+    val context = LocalContext.current
+    var couponCode by remember { mutableStateOf("") }
+    var discountAmount by remember { mutableStateOf(0) }
+    val total = cartItems.sumOf { it.totalPrice }
+    val finalTotal = (total - discountAmount).coerceAtLeast(0)
 
     Scaffold(
-        topBar = {
-            CustomerTopBar(title = "Giỏ Hàng (${localCart.size})", onBack = onBack)
-        }
+        topBar = { CustomerTopBar(title = "Giỏ Hàng (${cartItems.size})", onBack = onBack) }
     ) { padding ->
         Column(modifier = Modifier.padding(padding).fillMaxSize()) {
             LazyColumn(
@@ -53,182 +67,138 @@ fun CartScreen(
                 contentPadding = PaddingValues(16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                // Delivery Type
+                // ── Delivery Type ──────────────────────────────────────────
                 item {
                     Card(shape = RoundedCornerShape(14.dp)) {
                         Column(modifier = Modifier.padding(16.dp)) {
-                            Text("Hình thức nhận",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold)
+                            Text("Hình thức nhận", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                             Spacer(modifier = Modifier.height(10.dp))
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                 DeliveryType.entries.filter { it != DeliveryType.DINE_IN }.forEach { type ->
                                     FilterChip(
                                         selected = deliveryType == type,
-                                        onClick = { deliveryType = type },
-                                        label = { Text(type.displayName, style = MaterialTheme.typography.labelSmall) },
-                                        colors = FilterChipDefaults.filterChipColors(
-                                            selectedContainerColor = PrimaryColor.copy(alpha = 0.15f),
-                                            selectedLabelColor = PrimaryColor
-                                        )
+                                        onClick = { onDeliveryTypeChange(type) },
+                                        label = { Text(type.displayName) }
                                     )
                                 }
                             }
+
                             if (deliveryType == DeliveryType.DELIVERY) {
+                                Spacer(modifier = Modifier.height(16.dp))
+                                Text("Địa chỉ giao hàng", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium)
                                 Spacer(modifier = Modifier.height(8.dp))
                                 OutlinedTextField(
-                                    value = SampleData.customerUser.defaultAddresses.firstOrNull() ?: "",
-                                    onValueChange = {},
-                                    label = { Text("Địa chỉ giao hàng") },
-                                    leadingIcon = { Icon(Icons.Default.LocationOn, null) },
+                                    value = deliveryAddress,
+                                    onValueChange = onAddressChange,
+                                    placeholder = { Text("Nhập địa chỉ nhận hàng chi tiết") },
                                     modifier = Modifier.fillMaxWidth(),
-                                    shape = RoundedCornerShape(10.dp),
-                                    readOnly = true,
-                                    trailingIcon = { Icon(Icons.Default.Edit, "Đổi địa chỉ") }
+                                    leadingIcon = { Icon(Icons.Default.LocationOn, null, tint = PrimaryColor) },
+                                    shape = RoundedCornerShape(12.dp)
                                 )
                             }
                         }
                     }
                 }
 
-                // Cart Items
-                item {
-                    Text("Món đã chọn",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold)
-                }
-                items(localCart, key = { it.menuItemId }) { item ->
-                    CartScreen_ItemRow(
-                        item = item,
-                        onQtyChange = { newQty ->
-                            localCart = localCart.map {
-                                if (it.menuItemId == item.menuItemId) it.copy(qty = newQty) else it
-                            }.filter { it.qty > 0 }.toMutableList()
+                item { Text("Món đã chọn", fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 8.dp)) }
+
+                // ── Cart Items ─────────────────────────────────────────────
+                items(cartItems, key = { it.menuItemId }) { item ->
+                    Card(shape = RoundedCornerShape(12.dp), modifier = Modifier.fillMaxWidth()) {
+                        Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(item.name, fontWeight = FontWeight.SemiBold)
+                                Text("%,d ₫".format(item.price), color = PrimaryColor)
+                            }
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                IconButton(onClick = { onQtyChange(item, item.qty - 1) }) { Icon(Icons.Default.Remove, null) }
+                                Text("${item.qty}", fontWeight = FontWeight.Bold)
+                                IconButton(onClick = { onQtyChange(item, item.qty + 1) }) { Icon(Icons.Default.Add, null, tint = PrimaryColor) }
+                            }
                         }
-                    )
+                    }
                 }
 
-                // Promo Code
+                // ── Coupon Code ────────────────────────────────────────────
                 item {
                     Card(shape = RoundedCornerShape(14.dp)) {
                         Column(modifier = Modifier.padding(16.dp)) {
-                            Text("Mã giảm giá",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold)
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text("Mã giảm giá", fontWeight = FontWeight.Bold)
+                            Spacer(modifier = Modifier.height(12.dp))
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                                 OutlinedTextField(
-                                    value = promoCode,
-                                    onValueChange = { promoCode = it.uppercase(); promoApplied = false },
-                                    placeholder = { Text("Nhập mã (VD: GOURMET20)") },
+                                    value = couponCode,
+                                    onValueChange = { couponCode = it },
+                                    placeholder = { Text("Nhập mã (VD: GOURMET20)", fontSize = 13.sp) },
                                     modifier = Modifier.weight(1f),
-                                    shape = RoundedCornerShape(10.dp),
-                                    singleLine = true,
-                                    leadingIcon = { Icon(Icons.Default.Redeem, null) }
+                                    leadingIcon = { Icon(Icons.Default.Redeem, null, tint = PrimaryColor) },
+                                    shape = RoundedCornerShape(12.dp)
                                 )
                                 Button(
-                                    onClick = { promoApplied = promoCode == "GOURMET20" },
-                                    shape = RoundedCornerShape(10.dp),
+                                    onClick = {
+                                        if (couponCode.uppercase() == "GOURMET20") {
+                                            discountAmount = (total * 0.2).toInt()
+                                            Toast.makeText(context, "Đã áp dụng mã giảm giá 20%!", Toast.LENGTH_SHORT).show()
+                                        } else {
+                                            discountAmount = 0
+                                            Toast.makeText(context, "Mã không hợp lệ", Toast.LENGTH_SHORT).show()
+                                        }
+                                    },
+                                    shape = RoundedCornerShape(12.dp),
+                                    colors = ButtonDefaults.buttonColors(containerColor = PrimaryColor),
                                     modifier = Modifier.height(56.dp)
-                                ) { Text("Áp dụng") }
-                            }
-                            if (promoApplied) {
-                                Spacer(modifier = Modifier.height(4.dp))
-                                Text("✅ Giảm 20% đã được áp dụng!",
-                                    color = SuccessColor, style = MaterialTheme.typography.bodySmall,
-                                    fontWeight = FontWeight.SemiBold)
+                                ) {
+                                    Text("Áp dụng")
+                                }
                             }
                         }
                     }
                 }
 
-                // Order summary
+                // ── Price Summary ──────────────────────────────────────────
                 item {
                     Card(shape = RoundedCornerShape(14.dp)) {
-                        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            CartTotalRow("Tạm tính", "%,d ₫".format(subtotal))
-                            if (discount > 0)
-                                CartTotalRow("Giảm giá", "-%,d ₫".format(discount), valueColor = SuccessColor)
-                            if (deliveryFee > 0)
-                                CartTotalRow("Phí giao hàng", "%,d ₫".format(deliveryFee))
-                            HorizontalDivider()
-                            CartTotalRow(
-                                "Tổng cộng", "%,d ₫".format(total),
-                                valueColor = PrimaryColor,
-                                style = MaterialTheme.typography.titleMedium
-                            )
+                        Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                Text("Tạm tính", color = Color.Gray)
+                                Text("%,d ₫".format(total), fontWeight = FontWeight.Bold)
+                            }
+                            if (discountAmount > 0) {
+                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                    Text("Giảm giá", color = Color.Gray)
+                                    Text("- %,d ₫".format(discountAmount), color = PrimaryColor, fontWeight = FontWeight.Bold)
+                                }
+                            }
+                            HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                Text("Tổng cộng", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                                Text("%,d ₫".format(finalTotal), color = PrimaryColor, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.ExtraBold)
+                            }
                         }
                     }
                 }
             }
 
-            // Checkout CTA
             Surface(shadowElevation = 12.dp) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Button(
-                        onClick = onCheckout,
-                        enabled = localCart.isNotEmpty(),
-                        modifier = Modifier.fillMaxWidth().height(56.dp),
-                        shape = RoundedCornerShape(14.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = PrimaryColor)
-                    ) {
-                        Icon(Icons.Default.Payment, null)
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("Tiến hành thanh toán — %,d ₫".format(total),
-                            fontWeight = FontWeight.Bold)
-                    }
+                Button(
+                    onClick = {
+                        if (deliveryType == DeliveryType.DELIVERY && deliveryAddress.isBlank()) {
+                            Toast.makeText(context, "Vui lòng nhập địa chỉ giao hàng", Toast.LENGTH_SHORT).show()
+                            return@Button
+                        }
+                        if (authViewModel.isLoggedIn()) onCheckout() else onNavigateToLogin()
+                    },
+                    enabled = cartItems.isNotEmpty(),
+                    modifier = Modifier.fillMaxWidth().padding(16.dp).height(56.dp),
+                    shape = RoundedCornerShape(14.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = PrimaryColor)
+                ) {
+                    Icon(Icons.Default.CreditCard, null)
+                    Spacer(Modifier.width(8.dp))
+                    Text("Tiến hành thanh toán — %,d ₫".format(finalTotal), fontWeight = FontWeight.Bold)
                 }
             }
         }
-    }
-}
-
-@Composable
-private fun CartScreen_ItemRow(item: OrderItem, onQtyChange: (Int) -> Unit) {
-    Card(shape = RoundedCornerShape(12.dp)) {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(12.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(item.name, fontWeight = FontWeight.SemiBold)
-                if (item.note.isNotBlank())
-                    Text("* ${item.note}", style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.error)
-                Text("%,d ₫".format(item.price), color = PrimaryColor,
-                    style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold)
-            }
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                IconButton(onClick = { onQtyChange(item.qty - 1) }, modifier = Modifier.size(32.dp)) {
-                    Icon(if (item.qty > 1) Icons.Default.Remove else Icons.Default.Delete,
-                        "Giảm", tint = if (item.qty > 1) MaterialTheme.colorScheme.onSurface
-                                       else MaterialTheme.colorScheme.error,
-                        modifier = Modifier.size(20.dp))
-                }
-                Text("${item.qty}", fontWeight = FontWeight.Bold,
-                    style = MaterialTheme.typography.titleMedium, modifier = Modifier.widthIn(min = 24.dp))
-                IconButton(onClick = { onQtyChange(item.qty + 1) }, modifier = Modifier.size(32.dp)) {
-                    Icon(Icons.Default.Add, "Tăng", tint = PrimaryColor,
-                        modifier = Modifier.size(20.dp))
-                }
-            }
-            Text("%,d".format(item.totalPrice),
-                fontWeight = FontWeight.ExtraBold,
-                modifier = Modifier.widthIn(min = 70.dp),
-                color = MaterialTheme.colorScheme.onSurface)
-        }
-    }
-}
-
-@Composable
-private fun CartTotalRow(
-    label: String, value: String,
-    valueColor: Color = MaterialTheme.colorScheme.onSurface,
-    style: androidx.compose.ui.text.TextStyle = MaterialTheme.typography.bodyMedium
-) {
-    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-        Text(label, style = style)
-        Text(value, style = style, fontWeight = FontWeight.Bold, color = valueColor)
     }
 }
 
@@ -238,101 +208,134 @@ private fun CartTotalRow(
 
 @Composable
 fun CustomerCheckoutScreen(
-    order: Order = SampleData.sampleOrder,
-    onConfirm: (PaymentMethod) -> Unit,
+    cartItems: List<OrderItem>,
+    authViewModel: AuthViewModel,
+    deliveryType: DeliveryType,
+    deliveryAddress: String,
+    onConfirm: (String) -> Unit,
     onBack: () -> Unit
 ) {
-    var selectedMethod by remember { mutableStateOf(PaymentMethod.MOMO) }
-    var confirmed by remember { mutableStateOf(false) }
+    val coroutineScope = rememberCoroutineScope()
+    val context = LocalContext.current
+    var isSubmitting by remember { mutableStateOf(false) }
+    var confirmedOrderId by remember { mutableStateOf<String?>(null) }
+    val total = cartItems.sumOf { it.totalPrice }
 
-    if (confirmed) {
-        OrderConfirmedOverlay(
-            orderId = order.id,
-            eta = "~25 phút",
-            onDone = { onConfirm(selectedMethod) }
-        )
+    // Lấy thông tin người dùng từ StateFlow của ViewModel
+    val profileState by authViewModel.profileState.collectAsState()
+    val userProfile = (profileState as? ProfileUiState.Success)?.profile
+
+    // Đảm bảo thông tin profile được nạp
+    LaunchedEffect(Unit) {
+        if (profileState is ProfileUiState.Loading) {
+            authViewModel.loadUserProfile()
+        }
+    }
+
+    if (confirmedOrderId != null) {
+        OrderConfirmedOverlay(orderId = confirmedOrderId!!, onDone = { onConfirm(confirmedOrderId!!) })
         return
     }
 
-    Scaffold(
-        topBar = { CustomerTopBar(title = "Thanh Toán", onBack = onBack) }
-    ) { padding ->
-        Column(modifier = Modifier.padding(padding).fillMaxSize()) {
-            LazyColumn(modifier = Modifier.weight(1f), contentPadding = PaddingValues(16.dp),
-                verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                // Order summary
-                item {
-                    Card(shape = RoundedCornerShape(14.dp)) {
-                        Column(modifier = Modifier.padding(16.dp)) {
-                            Text("Tóm Tắt Đơn",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold)
-                            Spacer(modifier = Modifier.height(10.dp))
-                            order.items.forEach { item ->
-                                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                                    Text("${item.qty}× ${item.name}", style = MaterialTheme.typography.bodySmall)
-                                    Text("%,d ₫".format(item.totalPrice), style = MaterialTheme.typography.bodySmall,
-                                        fontWeight = FontWeight.Bold)
+    Scaffold(topBar = { CustomerTopBar(title = "Xác Nhận Thanh Toán", onBack = onBack) }) { padding ->
+        Column(modifier = Modifier.padding(padding).padding(16.dp)) {
+            Card(modifier = Modifier.weight(1f), shape = RoundedCornerShape(14.dp)) {
+                LazyColumn(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    item { Text("Tóm tắt đơn hàng", fontWeight = FontWeight.Bold) }
+                    items(cartItems) { item ->
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                            Text("${item.qty}x ${item.name}", style = MaterialTheme.typography.bodySmall)
+                            Text("%,d ₫".format(item.totalPrice), style = MaterialTheme.typography.bodySmall)
+                        }
+                    }
+                    item {
+                        HorizontalDivider(Modifier.padding(vertical = 8.dp))
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                            Text("Tổng cộng", fontWeight = FontWeight.Bold)
+                            Text("%,d ₫".format(total), color = PrimaryColor, fontWeight = FontWeight.ExtraBold)
+                        }
+                    }
+
+                    if (userProfile != null) {
+                        item {
+                            Spacer(Modifier.height(16.dp))
+                            Text("Thông tin khách hàng", fontWeight = FontWeight.Bold)
+                            Text("Họ tên: ${userProfile.fullName}", style = MaterialTheme.typography.bodySmall)
+                            Text("SĐT: ${userProfile.phone}", style = MaterialTheme.typography.bodySmall)
+                        }
+                    }
+                }
+            }
+
+            Spacer(Modifier.height(16.dp))
+            Button(
+                onClick = {
+                    if (isSubmitting) return@Button
+
+                    val userId = try { FirebaseAuth.getInstance().currentUser?.uid } catch (e: Exception) { null }
+                    if (userId == null) {
+                        Toast.makeText(context, "Vui lòng đăng nhập lại để tiếp tục", Toast.LENGTH_SHORT).show()
+                        return@Button
+                    }
+
+                    isSubmitting = true
+                    coroutineScope.launch {
+                        try {
+                            // Bổ sung đầy đủ thông tin để tránh lỗi Server PHP "Thiếu thông tin"
+                            val request = CreateOrderRequest(
+                                userId = userId,
+                                tableId = "Online",
+                                staffId = "", // Tránh gửi null
+                                branchId = "B01",
+                                totalPrice = total,
+                                deliveryType = "PICKUP",
+                                paymentMethod = "Tiền mặt",
+                                fullName = userProfile?.fullName ?: "Khách hàng",
+                                phone = userProfile?.phone ?: "",
+                                items = cartItems.map { item ->
+                                    OrderItemRequest(
+                                        menuItemId = item.menuItemId,
+                                        name = item.name,
+                                        qty = item.qty,
+                                        price = item.price,
+                                        note = if (item.note.isBlank()) "Đơn hàng Online" else item.note
+                                    )
                                 }
+                            )
+
+                            val response = withContext(Dispatchers.IO) {
+                                RetrofitClient.instance.createOrder(request)
                             }
-                            HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                                Text("Tổng cộng", fontWeight = FontWeight.Bold)
-                                Text("%,d ₫".format(order.total), color = PrimaryColor, fontWeight = FontWeight.ExtraBold)
+
+                            if (response.isSuccessful) {
+                                val body = response.body()
+                                if (body?.status == "success" && !body.orderId.isNullOrEmpty()) {
+                                    // Chuyển hướng ngay sang theo dõi đơn hàng như yêu cầu
+                                    onConfirm(body.orderId)
+                                } else {
+                                    val errorMsg = body?.message ?: "Lỗi thiếu thông tin đơn hàng"
+                                    Toast.makeText(context, "Thất bại: $errorMsg", Toast.LENGTH_LONG).show()
+                                }
+                            } else {
+                                Toast.makeText(context, "Lỗi Server (${response.code()})", Toast.LENGTH_SHORT).show()
                             }
+                        } catch (e: Exception) {
+                            Log.e("Checkout", "Error: ${e.message}")
+                            Toast.makeText(context, "Lỗi kết nối: ${e.localizedMessage}", Toast.LENGTH_LONG).show()
+                        } finally {
+                            isSubmitting = false
                         }
                     }
-                }
-
-                // Payment methods
-                item {
-                    Text("Phương Thức Thanh Toán",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold)
-                }
-                items(PaymentMethod.entries) { method ->
-                    CustomerPaymentCard(
-                        method = method,
-                        isSelected = selectedMethod == method,
-                        onClick = { selectedMethod = method }
-                    )
-                }
-
-                // ETA
-                item {
-                    Card(
-                        shape = RoundedCornerShape(14.dp),
-                        colors = CardDefaults.cardColors(containerColor = Color(0xFFF3E5F5))
-                    ) {
-                        Row(modifier = Modifier.padding(16.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                            Icon(Icons.Default.Schedule, null, tint = Color(0xFF7B1FA2),
-                                modifier = Modifier.size(32.dp))
-                            Column {
-                                Text("Thời gian dự kiến",
-                                    style = MaterialTheme.typography.labelMedium,
-                                    color = Color(0xFF7B1FA2))
-                                Text("~ 25 phút",
-                                    style = MaterialTheme.typography.titleLarge,
-                                    fontWeight = FontWeight.ExtraBold, color = Color(0xFF4A148C))
-                            }
-                        }
-                    }
-                }
-            }
-
-            Surface(shadowElevation = 12.dp) {
-                Button(
-                    onClick = { confirmed = true },
-                    modifier = Modifier.fillMaxWidth().padding(16.dp).height(56.dp),
-                    shape = RoundedCornerShape(14.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = PrimaryColor)
-                ) {
-                    Icon(Icons.Default.Lock, null)
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("Xác Nhận Thanh Toán qua ${selectedMethod.displayName}",
-                        fontWeight = FontWeight.Bold)
+                },
+                enabled = !isSubmitting && cartItems.isNotEmpty(),
+                modifier = Modifier.fillMaxWidth().height(56.dp),
+                shape = RoundedCornerShape(14.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = PrimaryColor)
+            ) {
+                if (isSubmitting) {
+                    CircularProgressIndicator(color = Color.White, modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
+                } else {
+                    Text("Xác Nhận Đặt Hàng", fontWeight = FontWeight.Bold)
                 }
             }
         }
@@ -340,61 +343,82 @@ fun CustomerCheckoutScreen(
 }
 
 @Composable
-private fun CustomerPaymentCard(method: PaymentMethod, isSelected: Boolean, onClick: () -> Unit) {
-    Card(
-        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
-        shape = RoundedCornerShape(12.dp),
-        border = if (isSelected) androidx.compose.foundation.BorderStroke(2.dp, PrimaryColor) else null,
-        colors = CardDefaults.cardColors(
-            containerColor = if (isSelected) PrimaryColor.copy(alpha = 0.06f)
-                             else MaterialTheme.colorScheme.surface
-        )
-    ) {
-        Row(
-            modifier = Modifier.padding(14.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            Text(method.icon, fontSize = 26.sp)
-            Text(method.displayName,
-                style = MaterialTheme.typography.bodyLarge,
-                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                modifier = Modifier.weight(1f))
-            if (isSelected) Icon(Icons.Default.CheckCircle, null, tint = PrimaryColor)
-        }
-    }
-}
-
-@Composable
-private fun OrderConfirmedOverlay(orderId: String, eta: String, onDone: () -> Unit) {
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Brush.verticalGradient(listOf(SuccessColor, Color(0xFF1B5E20)))),
-        contentAlignment = Alignment.Center
-    ) {
+private fun OrderConfirmedOverlay(orderId: String, onDone: () -> Unit) {
+    Box(modifier = Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(SuccessColor, Color(0xFF1B5E20)))), contentAlignment = Alignment.Center) {
         Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(16.dp)) {
             Icon(Icons.Default.CheckCircle, null, tint = Color.White, modifier = Modifier.size(80.dp))
-            Text("Đặt Hàng Thành Công!", style = MaterialTheme.typography.headlineMedium,
-                fontWeight = FontWeight.ExtraBold, color = Color.White)
+            Text("Đặt Hàng Thành Công!", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.ExtraBold, color = Color.White)
             Text("Mã đơn: #$orderId", color = Color.White.copy(alpha = 0.9f))
-            Surface(color = Color.White.copy(alpha = 0.15f), shape = RoundedCornerShape(14.dp)) {
-                Column(modifier = Modifier.padding(horizontal = 32.dp, vertical = 16.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text("Thời gian dự kiến", color = Color.White.copy(alpha = 0.8f),
-                        style = MaterialTheme.typography.bodySmall)
-                    Text(eta, style = MaterialTheme.typography.headlineLarge,
-                        fontWeight = FontWeight.ExtraBold, color = Color.White)
-                }
-            }
-            Spacer(modifier = Modifier.height(8.dp))
-            Button(
-                onClick = onDone,
-                colors = ButtonDefaults.buttonColors(containerColor = Color.White),
-                shape = RoundedCornerShape(14.dp),
-                modifier = Modifier.fillMaxWidth(0.7f).height(52.dp)
-            ) {
+            Button(onClick = onDone, colors = ButtonDefaults.buttonColors(containerColor = Color.White), shape = RoundedCornerShape(14.dp)) {
                 Text("Theo dõi đơn hàng", color = SuccessColor, fontWeight = FontWeight.Bold)
+            }
+        }
+    }
+}
+
+// ─────────────────────────────────
+// ORDER LIST SCREEN (Tab Đơn hàng)
+// ─────────────────────────────────
+
+@Composable
+fun OrderListScreen(
+    authViewModel: AuthViewModel,
+    onOrderClick: (String) -> Unit,
+    onBack: () -> Unit
+) {
+    val userId = remember { try { FirebaseAuth.getInstance().currentUser?.uid } catch (e: Exception) { null } }
+    var orders by remember { mutableStateOf<List<Order>>(emptyList()) }
+    var isLoading by remember { mutableStateOf(true) }
+    var error by remember { mutableStateOf<String?>(null) }
+
+    LaunchedEffect(userId) {
+        if (userId == null) {
+            isLoading = false
+            return@LaunchedEffect
+        }
+        try {
+            val response = withContext(Dispatchers.IO) {
+                RetrofitClient.instance.getOrders(userId)
+            }
+            if (response.isSuccessful) {
+                orders = response.body()?.data ?: emptyList()
+            } else {
+                error = "Không thể tải danh sách đơn hàng"
+            }
+        } catch (e: Exception) {
+            error = "Lỗi kết nối: ${e.message}"
+        } finally {
+            isLoading = false
+        }
+    }
+
+    Scaffold(topBar = { CustomerTopBar(title = "Đơn Hàng Của Tôi", onBack = onBack) }) { padding ->
+        Box(modifier = Modifier.padding(padding).fillMaxSize()) {
+            if (isLoading) {
+                CircularProgressIndicator(Modifier.align(Alignment.Center), color = PrimaryColor)
+            } else if (userId == null) {
+                Text("Vui lòng đăng nhập để xem đơn hàng", Modifier.align(Alignment.Center), color = Color.Gray)
+            } else if (error != null) {
+                Text(error!!, Modifier.align(Alignment.Center), color = Color.Red)
+            } else if (orders.isEmpty()) {
+                Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally) {
+                    Icon(Icons.Default.ReceiptLong, null, Modifier.size(64.dp), Color.LightGray)
+                    Text("Chưa có đơn hàng nào", color = Color.Gray)
+                }
+            } else {
+                LazyColumn(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    items(orders) { order ->
+                        Card(modifier = Modifier.fillMaxWidth().clickable { onOrderClick(order.id) }, shape = RoundedCornerShape(12.dp)) {
+                            Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                                Column(Modifier.weight(1f)) {
+                                    Text("Mã đơn: #${order.id}", fontWeight = FontWeight.Bold)
+                                    Text(order.createdAt, style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+                                }
+                                Text("%,d ₫".format(order.totalPriceFromApi), color = PrimaryColor, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
+                }
             }
         }
     }
@@ -405,167 +429,69 @@ private fun OrderConfirmedOverlay(orderId: String, eta: String, onDone: () -> Un
 // ─────────────────────────────────
 
 @Composable
-fun OrderTrackingScreen(
-    orderId: String = "O1001",
-    onBack: () -> Unit
-) {
-    val order = SampleData.sampleOrder.copy(id = orderId)
-    var currentStep by remember { mutableIntStateOf(2) } // 0-4
+fun OrderTrackingScreen(orderId: String, onBack: () -> Unit) {
+    var order by remember { mutableStateOf<Order?>(null) }
+    var isLoading by remember { mutableStateOf(true) }
+    var errorMessage by remember { mutableStateOf<String?>(null) }
 
-    val steps = listOf(
-        "Đơn đã đặt" to "18:20",
-        "Nhà hàng xác nhận" to "18:22",
-        "Đang chuẩn bị" to "18:25",
-        "Sẵn sàng" to "--:--",
-        "Hoàn thành" to "--:--"
-    )
-
-    Scaffold(
-        topBar = { CustomerTopBar(title = "Theo Dõi Đơn #$orderId", onBack = onBack) }
-    ) { padding ->
-        LazyColumn(
-            modifier = Modifier.padding(padding),
-            contentPadding = PaddingValues(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            // Status banner
-            item {
-                Card(
-                    shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(containerColor = Color(0xFFFFF3E0))
-                ) {
-                    Row(modifier = Modifier.padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        Text("🔥", fontSize = 36.sp)
-                        Column {
-                            Text(order.status.displayName,
-                                style = MaterialTheme.typography.titleLarge,
-                                fontWeight = FontWeight.ExtraBold, color = PrimaryColor)
-                            Text("Dự kiến hoàn thành lúc ${order.eta}",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.outline)
-                        }
-                    }
-                }
+    LaunchedEffect(orderId) {
+        if (orderId.isBlank()) { isLoading = false; errorMessage = "Mã đơn hàng không hợp lệ"; return@LaunchedEffect }
+        try {
+            val response = withContext(Dispatchers.IO) {
+                RetrofitClient.instance.getOrderById(orderId)
             }
-
-            // Timeline
-            item {
-                Card(shape = RoundedCornerShape(16.dp)) {
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        Text("Trạng Thái Đơn",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold)
-                        Spacer(modifier = Modifier.height(16.dp))
-                        steps.forEachIndexed { idx, (label, time) ->
-                            TrackingTimelineRow(
-                                label = label,
-                                time = time,
-                                isDone = idx < currentStep,
-                                isCurrent = idx == currentStep,
-                                isLast = idx == steps.lastIndex
-                            )
-                        }
-                    }
-                }
+            if (response.isSuccessful) {
+                order = response.body()?.data
+                if (order == null) errorMessage = "Không tìm thấy đơn hàng #$orderId"
+            } else {
+                errorMessage = "Lỗi kết nối máy chủ (${response.code()})"
             }
+        } catch (e: Exception) {
+            errorMessage = "Lỗi: ${e.message}"
+        } finally { isLoading = false }
+    }
 
-            // Order items
-            item {
-                Card(shape = RoundedCornerShape(16.dp)) {
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        Text("Món đã đặt",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold)
-                        Spacer(modifier = Modifier.height(8.dp))
-                        order.items.forEach { item ->
-                            Row(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween) {
-                                Text("${item.qty}× ${item.name}",
-                                    style = MaterialTheme.typography.bodyMedium)
-                                Text("%,d ₫".format(item.totalPrice),
-                                    fontWeight = FontWeight.Bold)
+    Scaffold(topBar = { CustomerTopBar(title = "Chi Tiết Đơn Hàng", onBack = onBack) }) { padding ->
+        Box(modifier = Modifier.padding(padding).fillMaxSize()) {
+            if (isLoading) {
+                CircularProgressIndicator(Modifier.align(Alignment.Center), color = PrimaryColor)
+            } else if (errorMessage != null) {
+                Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally) {
+                    Icon(Icons.Default.ErrorOutline, null, Modifier.size(64.dp), Color.LightGray)
+                    Text(errorMessage!!, textAlign = TextAlign.Center, modifier = Modifier.padding(16.dp))
+                    Button(onClick = onBack) { Text("Quay lại") }
+                }
+            } else if (order != null) {
+                Column(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                    Card(shape = RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(containerColor = Color(0xFFFFF3E0))) {
+                        Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Text("🔥", fontSize = 32.sp)
+                            Column(Modifier.padding(start = 12.dp)) {
+                                Text(order?.status?.displayName ?: "Đang xử lý", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = PrimaryColor)
+                                Text("Cập nhật lúc: ${order?.createdAt}", style = MaterialTheme.typography.bodySmall)
                             }
                         }
-                        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-                        Row(Modifier.fillMaxWidth(), Arrangement.SpaceBetween) {
-                            Text("Tổng", fontWeight = FontWeight.Bold)
-                            Text("%,d ₫".format(order.total),
-                                color = PrimaryColor, fontWeight = FontWeight.ExtraBold)
+                    }
+                    Card(shape = RoundedCornerShape(16.dp), modifier = Modifier.weight(1f)) {
+                        LazyColumn(modifier = Modifier.padding(16.dp)) {
+                            item { Text("Danh sách món", fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 8.dp)) }
+                            items(order?.items ?: emptyList()) { item ->
+                                Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), horizontalArrangement = Arrangement.SpaceBetween) {
+                                    Text("${item.qty}x ${item.name}")
+                                    Text("%,d ₫".format(item.totalPrice))
+                                }
+                            }
+                            item {
+                                HorizontalDivider(Modifier.padding(vertical = 12.dp))
+                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                    Text("Tổng thanh toán", fontWeight = FontWeight.ExtraBold)
+                                    Text("%,d ₫".format(order?.totalPriceFromApi ?: 0), color = PrimaryColor, fontWeight = FontWeight.ExtraBold)
+                                }
+                            }
                         }
                     }
                 }
             }
-
-            // Contact restaurant
-            item {
-                OutlinedButton(
-                    onClick = {},
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp)
-                ) {
-                    Icon(Icons.Default.Chat, null)
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("Nhắn tin với nhà hàng")
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun TrackingTimelineRow(
-    label: String, time: String,
-    isDone: Boolean, isCurrent: Boolean, isLast: Boolean
-) {
-    Row(modifier = Modifier.fillMaxWidth()) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Box(
-                modifier = Modifier
-                    .size(24.dp)
-                    .clip(CircleShape)
-                    .background(
-                        when {
-                            isDone || isCurrent -> if (isDone) SuccessColor else PrimaryColor
-                            else -> MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
-                        }
-                    ),
-                contentAlignment = Alignment.Center
-            ) {
-                if (isDone)
-                    Icon(Icons.Default.Check, null, tint = Color.White, modifier = Modifier.size(14.dp))
-                else if (isCurrent)
-                    Box(modifier = Modifier.size(8.dp).clip(CircleShape).background(Color.White))
-            }
-            if (!isLast) {
-                Box(
-                    modifier = Modifier
-                        .width(2.dp)
-                        .height(32.dp)
-                        .background(if (isDone) SuccessColor.copy(alpha = 0.3f)
-                                    else MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))
-                )
-            }
-        }
-        Spacer(modifier = Modifier.width(12.dp))
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(bottom = if (!isLast) 16.dp else 0.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                label,
-                style = MaterialTheme.typography.bodyMedium,
-                fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.Normal,
-                color = if (isCurrent) PrimaryColor
-                        else if (isDone) MaterialTheme.colorScheme.onSurface
-                        else MaterialTheme.colorScheme.outline
-            )
-            Text(time,
-                style = MaterialTheme.typography.bodySmall,
-                color = if (isDone || isCurrent) MaterialTheme.colorScheme.onSurface
-                        else MaterialTheme.colorScheme.outline.copy(alpha = 0.5f))
         }
     }
 }

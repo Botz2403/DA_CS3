@@ -22,9 +22,22 @@ fun CustomerMainScreen(
     authViewModel: AuthViewModel,
     initialTab: CustomerTab = CustomerTab.HOME,
     cartItems: List<OrderItem>,
-    onAddToCart: (OrderItem) -> Unit
+    onAddToCart: (OrderItem) -> Unit,
+    lastOrderId: String? = null,
+    targetTab: String? = null
 ) {
-    var selectedTab by remember { mutableStateOf(initialTab) }
+    val selectedTabState = remember {
+        mutableStateOf(
+            when (targetTab) {
+                "orders" -> CustomerTab.ORDERS
+                "menu" -> CustomerTab.MENU
+                "booking" -> CustomerTab.BOOKING
+                "profile" -> CustomerTab.PROFILE
+                else -> initialTab
+            }
+        )
+    }
+    var selectedTab by selectedTabState
 
     Scaffold(
         bottomBar = {
@@ -82,23 +95,39 @@ fun CustomerMainScreen(
                     onCartClick = {
                         navController.navigate(Screen.CustomerCart.route)
                     },
+                    onAddToCart = onAddToCart,
+                    cartCount = cartItems.size,
                     onBack = { selectedTab = CustomerTab.HOME }
                 )
 
-                CustomerTab.BOOKING -> BookingScreen(
-                    user      = SampleData.customerUser,
-                    onConfirm = { selectedTab = CustomerTab.HOME },
-                    onBack    = { selectedTab = CustomerTab.HOME }
-                )
+                CustomerTab.BOOKING -> {
+                    if (authViewModel.isLoggedIn()) {
+                        BookingScreen(
+                            authViewModel = authViewModel,
+                            onConfirm     = { _ -> selectedTab = CustomerTab.HOME },
+                            onBack        = { selectedTab = CustomerTab.HOME }
+                        )
+                    } else {
+                        LaunchedEffect(Unit) {
+                            navController.navigate(Screen.Login.route)
+                            selectedTab = CustomerTab.HOME 
+                        }
+                    }
+                }
 
-                CustomerTab.ORDERS -> OrderTrackingScreen(
-                    orderId = "O1001",
-                    onBack  = { selectedTab = CustomerTab.HOME }
-                )
+                CustomerTab.ORDERS -> {
+                    // ✅ Thay đổi: Hiển thị danh sách đơn hàng thay vì chỉ 1 đơn lẻ
+                    OrderListScreen(
+                        authViewModel = authViewModel,
+                        onOrderClick = { id ->
+                            navController.navigate(Screen.OrderTracking.buildRoute(id))
+                        },
+                        onBack = { selectedTab = CustomerTab.HOME }
+                    )
+                }
 
                 CustomerTab.PROFILE -> {
                     if (authViewModel.isLoggedIn()) {
-                        // Đã đăng nhập → hiện hồ sơ với data Firebase thật
                         CustomerProfileScreen(
                             navController     = navController,
                             viewModel         = authViewModel,
@@ -113,7 +142,6 @@ fun CustomerMainScreen(
                             }
                         )
                     } else {
-                        // Chưa đăng nhập → chuyển sang LoginScreen (đầy đủ: Email, Google, Đăng ký, Quên MK)
                         navController.navigate(Screen.Login.route)
                     }
                 }

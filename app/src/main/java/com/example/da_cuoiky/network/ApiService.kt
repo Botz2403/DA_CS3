@@ -5,9 +5,9 @@ import retrofit2.Response
 import retrofit2.http.Body
 import retrofit2.http.GET
 import retrofit2.http.POST
+import retrofit2.http.Query
 
 interface ApiService {
-    // Gọi đến file api_menu.php để nhận dữ liệu JSON sạch
     @GET("view/api_menu.php")
     suspend fun getMenuItems(): List<MenuItem>
 
@@ -21,5 +21,18 @@ interface ApiService {
     suspend fun getTables(): Response<TableApiResponse>
 
     @POST("view/api_create_order.php")
-    suspend fun createOrder(@Body order: Order): Response<GenericApiResponse>
+    suspend fun createOrder(@Body request: CreateOrderRequest): Response<CreateOrderResponse>
+
+    @GET("view/api_get_order.php")
+    suspend fun getOrderById(@Query("id") id: String): Response<OrderResponse>
+
+    // ✅ Lấy danh sách đơn hàng của người dùng
+    @GET("view/api_get_orders.php")
+    suspend fun getOrders(@Query("user_id") userId: String): Response<OrderListResponse>
+
+    @POST("view/api_create_reservation.php")
+    suspend fun createReservation(@Body request: ReservationRequest): Response<GenericApiResponse>
+
+    @GET("view/api_get_reservations.php")
+    suspend fun getReservations(): Response<ReservationListResponse>
 }

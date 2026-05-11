@@ -480,7 +480,7 @@ fun LoginScreen(
                                         }
                                     }
                                 } else {
-                                    feedbackMessage = "Email hoặc mật khẩu không đúng!"
+                                    feedbackMessage = role // Here 'role' contains the error message when success is false
                                     isError = true
                                 }
                             }

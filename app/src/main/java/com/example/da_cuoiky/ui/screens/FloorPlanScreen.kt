@@ -229,7 +229,6 @@ fun TableTile(
                 text = when (table.zone) {
                     TableZone.VIP -> "⭐"
                     TableZone.OUTDOOR -> "🌿"
-                    TableZone.BAR -> "🍸"
                     TableZone.INDOOR -> ""
                 },
                 fontSize = 14.sp

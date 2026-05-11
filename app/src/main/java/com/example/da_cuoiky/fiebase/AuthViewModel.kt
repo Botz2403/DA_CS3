@@ -28,7 +28,8 @@ class AuthViewModel : ViewModel() {
                 }
                 onResult(true, role)
             } else {
-                onResult(false, "")
+                val errorMsg = result.exceptionOrNull()?.message ?: "Email hoặc mật khẩu không đúng!"
+                onResult(false, errorMsg)
             }
         }
     }
